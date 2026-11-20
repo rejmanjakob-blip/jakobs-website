@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useHydrated } from "@tanstack/react-router";
 import { Save, Check, LoaderCircle, TriangleAlert, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listSaves, readSave, saveLocation, SlotTakenError, type SaveLocation } from "@/lib/local-saves";
+import { listSaves, readSave, saveLocation, SlotTakenError, uploadFolderToCloud, type SaveLocation } from "@/lib/local-saves";
 import { useBoardPersistence } from "@/hooks/use-board-persistence";
 import type { BoardState, SaveSlot } from "@/lib/board-state";
 
@@ -57,6 +57,15 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
     if (!restored) throw new Error(`Slot ${slot} is empty.`);
     persistence.selectSlot(slot, restored.board, restored.version); onRestore(restored.board); close();
   });
+  // First-time cloud setup on this computer: copy the saves folder into the empty cloud, then open the slot in use.
+  const upload = () => void run(async () => {
+    const count = await uploadFolderToCloud();
+    setSlots(await listSaves());
+    const target = persistence.slot ?? 1;
+    const restored = await readSave(target);
+    if (restored) { persistence.selectSlot(target, restored.board, restored.version); onRestore(restored.board); }
+    setMessage(`Uploaded ${count} save${count === 1 ? "" : "s"} to the cloud.`);
+  });
   const { status, slot: activeSlot } = persistence;
   const label = status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : status === "error" ? "Not saved" : status === "conflict" ? "Changed elsewhere" : activeSlot ? `Saved · slot ${activeSlot}` : "Saved";
 
@@ -79,6 +88,10 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
         Every change autosaves to {activeSlot ? <b>slot {activeSlot}</b> : "the slot you pick"}.
         {where === "cloud" ? " Saves are in the cloud, shared by all your devices." : where === "folder" ? " Saves are files in the project's saves folder on this computer." : where === "browser" ? " Saves are kept in this browser on this device." : ""}
       </p>
+      {where === "cloud" && !busy && slots.length === 0 && <div className="save-confirm">
+        <span>The cloud is empty. Copy the saves from this computer's saves folder into it?</span>
+        <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" onClick={upload}>Upload saves</Button>
+      </div>}
       {SLOTS.map(slot => {
         const saved = slots.find(item => item.slot === slot);
         const current = slot === activeSlot;
