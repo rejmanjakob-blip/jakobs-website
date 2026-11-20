@@ -4,14 +4,14 @@ import { initialBoard } from "@/lib/board-state";
 import { useBoardPersistence } from "@/hooks/use-board-persistence";
 
 const api = vi.hoisted(() => ({ write: vi.fn(), read: vi.fn(), last: vi.fn(() => 1), remember: vi.fn() }));
-vi.mock("@/lib/local-saves", () => ({ writeSave: api.write, readSave: api.read, lastSlot: api.last, rememberSlot: api.remember }));
+vi.mock("@/lib/local-saves", () => ({ writeSave: api.write, readSave: api.read, lastSlot: api.last, rememberSlot: api.remember, slotVersion: async () => 0, SaveConflictError: class extends Error {} }));
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe("Opened-slot autosave", () => {
   it("opens the last-used slot and autosaves edits to it", async () => {
     vi.useFakeTimers(); api.last.mockReturnValueOnce(3);
     const saved = { ...initialBoard(), active: 2 };
-    api.read.mockResolvedValue(saved); api.write.mockResolvedValue({ slot: 3, saved_at: "now" });
+    api.read.mockResolvedValue({ board: saved, version: 4 }); api.write.mockResolvedValue({ slot: 3, saved_at: "now", version: 5 });
     const restore = vi.fn();
     const { result, rerender } = renderHook(({ board }) => useBoardPersistence(board, restore), { initialProps: { board: initialBoard() } });
     await act(async () => {});
@@ -22,7 +22,7 @@ describe("Opened-slot autosave", () => {
     rerender({ board: edited });
     expect(result.current.status).toBe("saving");
     await act(async () => { vi.advanceTimersByTime(700); });
-    expect(api.write).toHaveBeenCalledWith(3, edited, true);
+    expect(api.write).toHaveBeenCalledWith(3, edited, true, 4);
     expect(result.current.status).toBe("saved");
   });
   it("starts an empty slot without writing until something changes", async () => {

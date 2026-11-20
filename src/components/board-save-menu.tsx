@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useHydrated } from "@tanstack/react-router";
-import { Save, Check, LoaderCircle, TriangleAlert } from "lucide-react";
+import { Save, Check, LoaderCircle, TriangleAlert, Cloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listSaves, readSave, saveLocation, SlotTakenError } from "@/lib/local-saves";
+import { listSaves, readSave, saveLocation, SlotTakenError, type SaveLocation } from "@/lib/local-saves";
 import { useBoardPersistence } from "@/hooks/use-board-persistence";
 import type { BoardState, SaveSlot } from "@/lib/board-state";
 
@@ -14,9 +14,10 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
   const [slots, setSlots] = useState<SaveSlot[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [where, setWhere] = useState<"folder" | "browser" | null>(null);
+  const [where, setWhere] = useState<SaveLocation | null>(null);
   const [confirm, setConfirm] = useState<{ slot: number; action: "overwrite" | "load" } | null>(null);
   const persistence = useBoardPersistence(snapshot, onRestore);
+  useEffect(() => { void saveLocation().then(setWhere, () => {}); }, []);
   const root = useRef<HTMLDivElement>(null);
   const lock = useRef(false);
   const close = () => { setOpen(false); setConfirm(null); setMessage(""); };
@@ -42,7 +43,7 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
     try {
       const saved = await persistence.write({ slot, snapshot, overwrite });
       setSlots(previous => [...previous.filter(item => item.slot !== slot), saved].sort((a, b) => a.slot - b.slot));
-      persistence.selectSlot(slot, snapshot); setConfirm(null); setMessage(`Saved to slot ${slot}. Changes now autosave there.`);
+      persistence.selectSlot(slot, snapshot, saved.version); setConfirm(null); setMessage(`Saved to slot ${slot}. Changes now autosave there.`);
     } catch (error) {
       if (error instanceof SlotTakenError) setConfirm({ slot, action: "overwrite" });
       else throw error;
@@ -50,26 +51,33 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
   });
   const load = (slot: number) => void run(async () => {
     // Store what's on screen first, so switching slots never loses the latest edits.
-    if (persistence.slot !== null) await persistence.write({ slot: persistence.slot, snapshot, overwrite: true });
+    await persistence.saveNow(snapshot);
     await persistence.flush();
     const restored = await readSave(slot);
     if (!restored) throw new Error(`Slot ${slot} is empty.`);
-    persistence.selectSlot(slot, restored); onRestore(restored); close();
+    persistence.selectSlot(slot, restored.board, restored.version); onRestore(restored.board); close();
   });
   const { status, slot: activeSlot } = persistence;
-  const label = status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : status === "error" ? "Not saved" : activeSlot ? `Saved · slot ${activeSlot}` : "Saved";
+  const label = status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : status === "error" ? "Not saved" : status === "conflict" ? "Changed elsewhere" : activeSlot ? `Saved · slot ${activeSlot}` : "Saved";
 
   return <div ref={root} className="board-save" data-ready={hydrated}>
     <Button variant="outline" className="glow-button save-button h-6 gap-1 px-1.5 text-[11px] font-normal" aria-label={`Save slots (${label})`} aria-expanded={open} aria-controls="save-slots"
       title="Your board saves automatically. Click to see save slots." onClick={toggle} data-status={status}>
-      {busy || status === "saving" || status === "loading" ? <LoaderCircle className="animate-spin" /> : status === "error" ? <TriangleAlert /> : <Save />}
+      {busy || status === "saving" || status === "loading" ? <LoaderCircle className="animate-spin" /> : status === "error" || status === "conflict" ? <TriangleAlert /> : where === "cloud" ? <Cloud /> : <Save />}
       <span className="save-label">{label}</span>
     </Button>
-    {!open && persistence.error && <div role="status" className="save-status glow-box">{persistence.error}</div>}
+    {!open && status === "conflict" && <div role="alertdialog" aria-label="Changed on another device" className="save-status glow-box flex max-w-[260px] flex-col gap-1.5">
+      <span>This board was changed on another device. Which version do you want?</span>
+      <div className="flex gap-1.5">
+        <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" disabled={busy} onClick={() => void run(() => persistence.resolveConflict("theirs"))}>Load the latest</Button>
+        <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" disabled={busy} onClick={() => void run(() => persistence.resolveConflict("mine"))}>Keep mine</Button>
+      </div>
+    </div>}
+    {!open && status !== "conflict" && persistence.error && <div role="status" className="save-status glow-box">{persistence.error}</div>}
     {open && <section id="save-slots" aria-label="Save slots" className="save-menu glow-box">
       <p className="save-help">
         Every change autosaves to {activeSlot ? <b>slot {activeSlot}</b> : "the slot you pick"}.
-        {where === "folder" ? " Saves are files in the project's saves folder on this computer." : where === "browser" ? " Saves are kept in this browser on this device." : ""}
+        {where === "cloud" ? " Saves are in the cloud, shared by all your devices." : where === "folder" ? " Saves are files in the project's saves folder on this computer." : where === "browser" ? " Saves are kept in this browser on this device." : ""}
       </p>
       {SLOTS.map(slot => {
         const saved = slots.find(item => item.slot === slot);

@@ -13,12 +13,20 @@ Then open http://localhost:8080.
 
 ## Where your saves live
 
-While the site runs on this computer, every change autosaves to the `saves/` folder in this project
-(`saves/slot-1.json` … `saves/slot-10.json`, uploaded videos in `saves/videos/`).
-That folder is git-ignored, so it is never pushed to GitHub. Copy it somewhere safe to back up your boards.
+**Cloud (recommended):** when the site has an Upstash Redis database connected (Vercel → Storage) and a
+`SITE_PASSWORD` set, every device — phone, laptop, and this computer — shares the same 10 save slots.
+Each picture is stored once; boards only reference it. If two devices edit the same slot, the second one is
+asked whether to load the latest or keep its own. Videos stay on the device that added them.
 
-The deployed site (for example on Vercel) has no access to this folder, so there the board saves in
-that browser on that device instead.
+While running on this computer with `.env.local` holding the same keys (`bunx vercel env pull .env.local`),
+edits save to the cloud and a backup copy is written to the git-ignored `saves/` folder.
+
+**Without the cloud:** on this computer saves are files in `saves/`; on the deployed site they stay in that browser.
+
+## Password
+
+Set `SITE_PASSWORD` in Vercel → Settings → Environment Variables and redeploy. The browser then asks for it
+before showing anything. Cloud saving refuses to run on the public site until a password is set.
 
 ## Built with
 

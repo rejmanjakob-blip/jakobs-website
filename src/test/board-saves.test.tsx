@@ -4,7 +4,7 @@ import { addSubtab, initialBoard, boardSchema, slotSchema } from "@/lib/board-st
 import { BoardSaveMenu } from "@/components/board-save-menu";
 const api = vi.hoisted(() => ({ list: vi.fn(), write: vi.fn(), read: vi.fn() }));
 vi.mock("@/lib/local-saves", () => ({ listSaves: api.list, writeSave: api.write, readSave: api.read, saveLocation: async () => "folder",
-  lastSlot: () => 1, rememberSlot: () => {}, SlotTakenError: class extends Error {} }));
+  lastSlot: () => 1, rememberSlot: () => {}, slotVersion: async () => 0, SlotTakenError: class extends Error {}, SaveConflictError: class extends Error {} }));
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 describe("Whole-board saves", () => {
   it("retains subtab contents and selection in whole-board snapshots", () => {
@@ -62,20 +62,20 @@ describe("Whole-board saves", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save to slot 2" }));
     expect(api.write).not.toHaveBeenCalled();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Yes/ })); });
-    expect(api.write).toHaveBeenCalledWith(2, snapshot, true);
+    expect(api.write).toHaveBeenCalledWith(2, snapshot, true, null);
   });
-  it("saves what's on screen before opening another slot", async () => {
+  it("opens another slot without re-saving an unchanged board", async () => {
     const other = { ...initialBoard(), active: 3 };
     api.list.mockResolvedValue([{ slot: 1, saved_at: "2026-11-06T23:00:00Z" }, { slot: 2, saved_at: "2026-11-06T23:00:00Z" }]);
-    api.read.mockImplementation(async (slot: number) => slot === 2 ? other : null);
-    api.write.mockResolvedValue({ slot: 1, saved_at: "2026-11-06T23:01:00Z" });
+    api.read.mockImplementation(async (slot: number) => slot === 2 ? { board: other, version: 0 } : null);
+    api.write.mockResolvedValue({ slot: 1, saved_at: "2026-11-06T23:01:00Z", version: 0 });
     const snapshot = initialBoard(); const onRestore = vi.fn();
     render(<BoardSaveMenu snapshot={snapshot} onRestore={onRestore} />);
     await act(async () => {});
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Save slots/ })); });
     fireEvent.click(screen.getByRole("button", { name: "Open slot 2" }));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Yes/ })); });
-    expect(api.write).toHaveBeenCalledWith(1, snapshot, true);
+    expect(api.write).not.toHaveBeenCalled();
     expect(onRestore).toHaveBeenLastCalledWith(other);
   });
 });

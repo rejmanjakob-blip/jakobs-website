@@ -10,7 +10,7 @@ Saves and uploaded videos live on the user's computer in `saves/` (git-ignored),
 - Keep dashboard tabs mounted with independent state in the glow-board module; collect all home and dashboard content into explicit snapshots for save and restore.
 - Keep home photo state mounted alongside dashboard state and reuse the photo module's insertion and pointer gestures so every screen has the same editing behavior.
 - Share checklist-aware paragraph editing between main and mini notes, encoding checkbox lines in note text so snapshots retain completion.
-- Store whole-board snapshots through src/lib/local-saves.ts: files in the git-ignored `saves/` folder via the dev-server plugin in vite.config.ts, falling back to browser IndexedDB on deployed builds. Never send saves to a remote service.
+- Store whole-board snapshots through src/lib/local-saves.ts: Upstash Redis cloud slots (pictures content-addressed, version compare-and-set, SITE_PASSWORD required on Vercel) when configured; otherwise the git-ignored `saves/` folder via the dev-server plugin, or browser IndexedDB on deployed builds.
 - Keep editable graphs in a dedicated bar-graph module and dashboard snapshots, defaulting missing graph arrays to empty so earlier saves remain compatible.
 - Store at most seven child dashboard contents under each parent and keep them mounted through the shared dashboard renderer; snapshot defaults preserve older saves and independent child edits.
 - Keep home zoom and background panning in the board snapshot as view-only transforms, moving the moon and photos together and scaling photo gesture deltas inversely to retain stored coordinates.

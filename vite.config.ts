@@ -1,13 +1,16 @@
 import { createReadStream } from "node:fs";
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { defineConfig, type Plugin, type PluginOption } from "vite";
+import { defineConfig, loadEnv, type Plugin, type PluginOption } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 
-export default defineConfig(async ({ command }) => {
+export default defineConfig(async ({ command, mode }) => {
+  // Make .env / .env.local values (like the cloud storage keys) visible to server code on this computer.
+  // Values already set in the real environment win.
+  for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), ""))) process.env[key] ??= value;
   const plugins: PluginOption[] = [
     tailwindcss(),
     tsConfigPaths({ projects: ["./tsconfig.json"] }),
