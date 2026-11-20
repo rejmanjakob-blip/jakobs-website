@@ -30,3 +30,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Board saves and uploaded videos stay on this computer and are never pushed
+saves/
+.claude/settings.local.json
+.env

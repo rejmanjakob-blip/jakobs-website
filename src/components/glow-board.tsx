@@ -1,21 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Moon, Undo2 } from "lucide-react";
+import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { CircleHelp, Moon, Plus, Undo2 } from "lucide-react";
 import { MediaHiddenContext } from "@/components/background-photos";
 import { Button } from "@/components/ui/button";
 import { BackgroundPhotos, PhotoOptions, InsertVideo, useBackgroundPhotos } from "@/components/background-photos";
 import { BoardSaveMenu } from "@/components/board-save-menu";
 import { BarGraphs, InsertGraph, newBarGraph } from "@/components/bar-graphs";
-import { addParent, MAX_PARENTS, addSubtab, removeSubtab, reorderParent, reorderSubtab, initialBoard, type DashboardState } from "@/lib/board-state";
+import { addParent, MAX_PARENTS, addSubtab, removeSubtab, reorderParent, reorderSubtab, initialBoard, newDashboard, type DashboardState } from "@/lib/board-state";
 import { useTabDrag } from "@/hooks/use-tab-drag";
 import { useSubtabPrompt } from "@/hooks/use-subtab-prompt";
 import { HomePhotoScene } from "@/components/home-photo-scene";
 import { MetricEditor, type MetricState } from "@/components/metric-editor";
 import { FloatingBoxes, InsertNote, InsertProgress, newNoteBox, newProgressBox } from "@/components/floating-boxes";
 import { DashboardView } from "@/components/dashboard-view";
-import horusEye from "@/assets/horus-eye.png.asset.json";
+import horusEye from "@/assets/horus-eye.png";
 
-export function GlowBoard({ opening = null }: { opening?: ReturnType<typeof initialBoard> | null } = {}) {
-  const [board, setBoard] = useState(() => opening ?? initialBoard());
+export function GlowBoard() {
+  const [board, setBoard] = useState(initialBoard);
   const active = board.active;
   // Undo history: keeps the 3 most recent board states; rapid changes (typing, dragging) within 500ms count as one action.
   const history = useRef<ReturnType<typeof initialBoard>[]>([]);
@@ -45,6 +45,24 @@ export function GlowBoard({ opening = null }: { opening?: ReturnType<typeof init
     undoing.current = true; lastChange.current = 0;
     setBoard(previous);
   };
+  const undoRef = useRef(undo);
+  undoRef.current = undo;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== "z") return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, [contenteditable]")) return;
+      event.preventDefault(); undoRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  useNoAccidentalSelection();
+  const [helpOpen, setHelpOpen] = useState(false);
+  // One stable updater for every dashboard, so unchanged tabs can skip re-rendering.
+  const updateDashboard = useCallback((index: number, child: number | null, update: (state: DashboardState) => DashboardState) => setBoard(previous => ({
+    ...previous,
+    dashboards: previous.dashboards.map((item, i) => i !== index ? item : child === null ? { ...item, ...update(item) } : { ...item, subTabs: item.subTabs.map((entry, j) => j === child ? update(entry) : entry) }),
+  })), []);
   const setActive = (active: number | null, activeSubtab: number | null = null) => setBoard(previous => ({ ...previous, active, activeSubtab }));
   const subtabPrompt = useSubtabPrompt(active !== null);
   const [hoveredParent, setHoveredParent] = useState<number | null>(null);
@@ -104,26 +122,33 @@ export function GlowBoard({ opening = null }: { opening?: ReturnType<typeof init
             event.preventDefault(); setActive(next);
             document.getElementById(`board-tab-${next}`)?.focus();
            }}> <span>{title || "Title"}</span></Button>
-          {menuParent === index && (board.dashboards[index]?.subTabs.length ?? 0) > 0 && <div data-no-subtab-prompt className="board-subtabs" role="group" aria-label={`${title || "Title"} subtabs`}
+          {menuParent === index && ((board.dashboards[index]?.subTabs.length ?? 0) > 0 || (pinnedParent === index && active === index)) && <div data-no-subtab-prompt className="board-subtabs" role="group" aria-label={`${title || "Title"} subtabs`}
             style={{ maxWidth: parentSize.width, "--parent-tab-height": `${parentSize.height}px` } as CSSProperties}>
             {board.dashboards[index]?.subTabs.map((subtab, child) => <Button key={child} variant="outline" role="tab" id={`board-subtab-${index}-${child}`}
               aria-label={`Subtab ${child + 1}: ${title || "Title"} - ${subtab.title || "Title"}`} aria-selected={active === index && board.activeSubtab === child}
               aria-controls={`board-subpanel-${index}-${child}`} className="glow-button board-tab h-auto min-h-6 px-1.5 py-0.5 text-[10px] bg-background text-foreground hover:bg-background hover:text-foreground font-normal aria-selected:font-semibold"
               data-drag-child={child} data-drag-owner={index}
               data-drag-target={tabDrag.target?.child !== null && tabDrag.target?.parent === index && tabDrag.target.target === child ? true : undefined}
-              title={subtab.title || "Title"} onPointerDown={event => { tabDrag.start(event, index, child); setPinnedParent(index); cancelDeleteHold(); deleteTimer.current = setTimeout(() => { setDeletePrompt({ parent: index, child, stage: 1 }); setHoveredParent(null); }, 10000); }}
+              title={subtab.title || "Title"} onPointerDown={event => { tabDrag.start(event, index, child); setPinnedParent(index); cancelDeleteHold(); deleteTimer.current = setTimeout(() => { setDeletePrompt({ parent: index, child, stage: 1 }); setHoveredParent(null); }, 3000); }}
               onPointerUp={cancelDeleteHold} onPointerLeave={cancelDeleteHold} onPointerCancel={cancelDeleteHold}
               onClick={() => { setActive(index, child); setHoveredParent(null); }}><span className="min-w-0 truncate">{subtab.title || "Title"}</span></Button>)}
+            {active === index && (board.dashboards[index]?.subTabs.length ?? 7) < 7 && <Button variant="outline" aria-label="Add sub tab" title="Add sub tab (up to 7)"
+              className="glow-button board-tab board-add h-auto min-h-6 px-1.5 py-0.5 text-[10px] font-normal" onClick={() => setBoard(addSubtab)}><Plus strokeWidth={1.5} /> sub tab</Button>}
           </div>}
         </div>)}
+        {titles.length < MAX_PARENTS && <Button variant="outline" aria-label="Add tab" title="Add tab" data-no-subtab-prompt
+          className="glow-button board-tab board-add h-6 w-6 p-[3px] bg-background text-foreground" onClick={() => setBoard(addParent)}><Plus strokeWidth={1.5} /></Button>}
       </div>
-      <Button variant="outline" aria-label="Undo" title="Undo" disabled={!canUndo}
+      <Button variant="outline" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo}
         className="glow-button ml-auto h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={undo}><Undo2 strokeWidth={1.5} /></Button>
       <Button variant="outline" aria-label={hideMedia ? "Show pictures and videos" : "Hide pictures and videos"} aria-pressed={hideMedia} title={hideMedia ? "Show media" : "Hide media"}
         className="glow-button -mr-1 h-6 w-8 shrink-0 p-0.5 [&_svg]:size-auto bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setHideMedia(v => !v)}>
         <HorusEye closed={hideMedia} /></Button>
-      <BoardSaveMenu snapshot={board} onRestore={restoreBoard} opening={opening} />
+      <BoardSaveMenu snapshot={board} onRestore={restoreBoard} />
+      <Button variant="outline" aria-label="How to use" title="How to use" aria-expanded={helpOpen} data-no-subtab-prompt
+        className="glow-button h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setHelpOpen(v => !v)}><CircleHelp strokeWidth={1.5} /></Button>
     </nav>
+    {helpOpen && <HelpPanel onClose={() => setHelpOpen(false)} />}
     {subtabPrompt.open && <div ref={subtabPrompt.prompt} role="dialog" aria-modal="false" aria-labelledby="add-subtab-title" className="subtab-prompt glow-box">
       <p id="add-subtab-title">add sub tab?</p>
       <div className="flex justify-center gap-3">
@@ -158,11 +183,11 @@ export function GlowBoard({ opening = null }: { opening?: ReturnType<typeof init
     {board.dashboards.map((parent, index) => <div key={index} className={active === index ? "flex min-h-0 flex-1 flex-col" : "hidden"} hidden={active !== index}>
       <div role="tabpanel" id={`board-panel-${index}`} aria-labelledby={`board-tab-${index}`} hidden={board.activeSubtab !== null}
         className={board.activeSubtab === null ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-        <Dashboard state={parent} onChange={update => setBoard(previous => ({ ...previous, dashboards: previous.dashboards.map((item, i) => i === index ? { ...item, ...update(item) } : item) }))} />
+        <Dashboard state={parent} index={index} child={null} onUpdate={updateDashboard} />
       </div>
       {parent.subTabs.map((subtab, child) => <div key={child} role="tabpanel" id={`board-subpanel-${index}-${child}`} aria-label={`${parent.title || "Title"} - ${subtab.title || "Title"}`}
         hidden={board.activeSubtab !== child} className={board.activeSubtab === child ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-        <Dashboard state={subtab} parentTitle={parent.title || "Title"} onChange={update => setBoard(previous => ({ ...previous, dashboards: previous.dashboards.map((item, i) => i === index ? { ...item, subTabs: item.subTabs.map((entry, j) => j === child ? update(entry) : entry) } : item) }))} />
+        <Dashboard state={subtab} parentTitle={parent.title || "Title"} index={index} child={child} onUpdate={updateDashboard} />
       </div>)}
     </div>)}
   </div></MediaHiddenContext.Provider>;
@@ -170,9 +195,10 @@ export function GlowBoard({ opening = null }: { opening?: ReturnType<typeof init
 
 type Item = MetricState & { text: string };
 
-function Dashboard({ state, onChange, parentTitle }: { state: DashboardState | undefined; onChange: (update: (state: DashboardState) => DashboardState) => void; parentTitle?: string }) {
-  const fallback = initialBoard().dashboards[0];
-  const current = state ?? fallback;
+type DashboardProps = { state: DashboardState | undefined; index: number; child: number | null; onUpdate: (index: number, child: number | null, update: (state: DashboardState) => DashboardState) => void; parentTitle?: string };
+const Dashboard = memo(function Dashboard({ state, index, child, onUpdate, parentTitle }: DashboardProps) {
+  const onChange = useCallback((update: (state: DashboardState) => DashboardState) => onUpdate(index, child, update), [onUpdate, index, child]);
+  const current = state ?? EMPTY_DASHBOARD;
   const zoom = current?.view?.zoom ?? 1;
   const photos = useBackgroundPhotos({ photos: current?.photos ?? [], onChange: photos => onChange(previous => ({ ...previous, photos })) });
   if (!current) return null;
@@ -227,14 +253,63 @@ function Dashboard({ state, onChange, parentTitle }: { state: DashboardState | u
     </main>
     </DashboardView>
   );
-}
+});
+const EMPTY_DASHBOARD = newDashboard();
 
 
 /** Eye of Horus icon traced from the user's reference; drawn in the current text color, with a slash when hidden. */
 function HorusEye({ closed }: { closed: boolean }) {
-  const mask = `url(${horusEye.url}) center / contain no-repeat`;
+  const mask = `url(${horusEye}) center / contain no-repeat`;
   return <span aria-hidden="true" className="relative block h-[15px] w-5">
     <span className="absolute inset-0 bg-current" style={{ mask, WebkitMask: mask }} />
     {closed && <svg viewBox="0 0 20 15" className="absolute inset-0 h-full w-full" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round"><path d="M1 14L19 1" /></svg>}
   </span>;
+}
+
+const EDITABLE = "input, textarea, [contenteditable='true']";
+/** While a press-and-drag that started outside a text field is in progress, nothing on the page can get text-selected. */
+function useNoAccidentalSelection() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const down = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(EDITABLE)) return;
+      root.classList.add("is-dragging");
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0 && !(document.activeElement?.matches(EDITABLE))) selection.removeAllRanges();
+    };
+    const up = () => root.classList.remove("is-dragging");
+    document.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    window.addEventListener("blur", up);
+    return () => { document.removeEventListener("pointerdown", down, true); window.removeEventListener("pointerup", up, true); window.removeEventListener("pointercancel", up, true); window.removeEventListener("blur", up); };
+  }, []);
+}
+
+const HELP: [string, string][] = [
+  ["Tabs", "Click a tab to open it, then type its name at the top. Drag tabs sideways to reorder them. + adds a tab."],
+  ["Sub tabs", "Click an open tab to see its sub tabs and + sub tab. Drag them up or down to reorder; hold one for 3 seconds to delete it."],
+  ["Add things", "The square buttons on the right of a dashboard add pictures, videos, a bar graph, a progress bar or a note."],
+  ["Move & resize", "Drag boxes (by their edge or title) and pictures to move them. Drag a box corner to resize the box. Hover the inner area and drag its small corner tick to make the title and text inside bigger or smaller (double-click the tick to reset). Click a title to edit it. Drag the empty background to pan and scroll to zoom (home has + and − buttons)."],
+  ["Pictures", "Click a picture for rotate, flip and cut options. Tap it 3 times quickly to delete it. Hold a video to fold it into a title."],
+  ["Checklists", "In a note, tap a line 3 times to turn it into a checkbox. Enter adds the next one; Enter twice stops."],
+  ["Progress", "Hold a progress bar for 4 seconds to switch between a bar and checkboxes."],
+  ["Graphs", "Double tap the bottom axis to add a bar, triple tap to remove one. Double tap the side axis for fractions."],
+  ["Saving", "Everything saves automatically. The save button shows the slot in use; click it to keep copies in other slots."],
+  ["Undo", "The arrow button or Ctrl+Z undoes your last 3 changes. The eye hides pictures and videos."],
+];
+
+function HelpPanel({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+  return <div data-no-subtab-prompt role="dialog" aria-labelledby="help-title" className="help-panel glow-box">
+    <div className="flex items-center justify-between gap-2">
+      <h2 id="help-title" className="text-sm font-semibold uppercase tracking-widest">How to use</h2>
+      <Button variant="outline" className="glow-button h-6 px-2 text-[11px]" onClick={onClose}>Close</Button>
+    </div>
+    <dl>{HELP.map(([term, text]) => <div key={term}><dt>{term}</dt><dd>{text}</dd></div>)}</dl>
+  </div>;
 }

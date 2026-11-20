@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { addSubtab, initialBoard, boardSchema, slotSchema } from "@/lib/board-state";
 import { BoardSaveMenu } from "@/components/board-save-menu";
 const api = vi.hoisted(() => ({ list: vi.fn(), write: vi.fn(), read: vi.fn() }));
-vi.mock("@/lib/board-saves.functions", () => ({ listBoardSaves: api.list, writeBoardSave: api.write, readBoardSave: api.read }));
+vi.mock("@/lib/local-saves", () => ({ listSaves: api.list, writeSave: api.write, readSave: api.read, saveLocation: async () => "folder",
+  lastSlot: () => 1, rememberSlot: () => {}, SlotTakenError: class extends Error {} }));
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 describe("Whole-board saves", () => {
   it("retains subtab contents and selection in whole-board snapshots", () => {
@@ -39,27 +40,42 @@ describe("Whole-board saves", () => {
     snapshot.homePhotos.push({ id: "photo", src: "data:image/png;base64,abc", x: 12, y: 15, width: 120, ratio: 2, rotation: 0, flipped: false });
     expect(boardSchema.parse(JSON.parse(JSON.stringify(snapshot)))).toEqual(snapshot);
   });
-  it("reveals ten slots only after more than one second and dismisses outside", async () => {
-    vi.useFakeTimers(); api.list.mockResolvedValue([]);
+  it("opens ten slots on click and dismisses outside", async () => {
+    api.list.mockResolvedValue([]); api.read.mockResolvedValue(null);
     render(<BoardSaveMenu snapshot={initialBoard()} onRestore={vi.fn()} />);
-    fireEvent.pointerEnter(screen.getByRole("button", { name: "Save all tabs" }));
-    await act(async () => { vi.advanceTimersByTime(1000); });
-    expect(screen.queryByRole("region", { name: "Saved slots" })).toBeNull();
-    await act(async () => { vi.advanceTimersByTime(1); });
-    expect(screen.getAllByRole("button", { name: /Save to slot/ })).toHaveLength(10);
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Save slots (Saved · slot 1)" })).toBeTruthy();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Save slots/ })); });
+    expect(screen.getByRole("region", { name: "Save slots" })).toBeTruthy();
+    // Slot 1 is in use, so only the other nine offer "Save here".
+    expect(screen.getAllByRole("button", { name: /Save to slot/ })).toHaveLength(9);
     fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole("region", { name: "Saved slots" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Save slots" })).toBeNull();
   });
   it("requires confirmation before overwriting a saved slot", async () => {
-    vi.useFakeTimers(); api.list.mockResolvedValue([{ slot: 1, saved_at: "2026-11-06T23:00:00Z" }]);
-    api.write.mockResolvedValue({ slot: 1, saved_at: "2026-11-06T23:01:00Z" });
+    api.list.mockResolvedValue([{ slot: 2, saved_at: "2026-11-06T23:00:00Z" }]); api.read.mockResolvedValue(null);
+    api.write.mockResolvedValue({ slot: 2, saved_at: "2026-11-06T23:01:00Z" });
     const snapshot = initialBoard();
     render(<BoardSaveMenu snapshot={snapshot} onRestore={vi.fn()} />);
-    fireEvent.keyDown(screen.getByRole("button", { name: "Save all tabs" }), { key: "ArrowDown" });
     await act(async () => {});
-    fireEvent.click(screen.getByRole("button", { name: "Overwrite slot 1" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Save slots/ })); });
+    fireEvent.click(screen.getByRole("button", { name: "Save to slot 2" }));
     expect(api.write).not.toHaveBeenCalled();
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Confirm" })); });
-    expect(api.write).toHaveBeenCalledWith({ data: { slot: 1, snapshot, overwrite: true } });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Yes/ })); });
+    expect(api.write).toHaveBeenCalledWith(2, snapshot, true);
+  });
+  it("saves what's on screen before opening another slot", async () => {
+    const other = { ...initialBoard(), active: 3 };
+    api.list.mockResolvedValue([{ slot: 1, saved_at: "2026-11-06T23:00:00Z" }, { slot: 2, saved_at: "2026-11-06T23:00:00Z" }]);
+    api.read.mockImplementation(async (slot: number) => slot === 2 ? other : null);
+    api.write.mockResolvedValue({ slot: 1, saved_at: "2026-11-06T23:01:00Z" });
+    const snapshot = initialBoard(); const onRestore = vi.fn();
+    render(<BoardSaveMenu snapshot={snapshot} onRestore={onRestore} />);
+    await act(async () => {});
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Save slots/ })); });
+    fireEvent.click(screen.getByRole("button", { name: "Open slot 2" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Yes/ })); });
+    expect(api.write).toHaveBeenCalledWith(1, snapshot, true);
+    expect(onRestore).toHaveBeenLastCalledWith(other);
   });
 });

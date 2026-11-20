@@ -26,7 +26,7 @@ export function checklistEnter(text: string, start: number, end: number, consecu
   return { text: text.slice(0, caret) + "\n" + unchecked + text.slice(Math.max(caret, end)), caret: caret + 3 };
 }
 
-export function ChecklistParagraph({ value, onChange, label, className }: { value: string; onChange: (value: string) => void; label: string; className: string }) {
+export function ChecklistParagraph({ value, onChange, label, className, style }: { value: string; onChange: (value: string) => void; label: string; className: string; style?: React.CSSProperties }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const pendingCaret = useRef<number | null>(null);
   const lastEnter = useRef(false);
@@ -50,7 +50,7 @@ export function ChecklistParagraph({ value, onChange, label, className }: { valu
     apply(change);
     return true;
   };
-  return <textarea ref={input} value={value} aria-label={label} placeholder="Write a paragraph…" className={className}
+  return <textarea ref={input} value={value} aria-label={label} placeholder="Write a paragraph…" className={className} style={style}
     onChange={event => { lastEnter.current = false; taps.current = null; onChange(event.target.value); }}
     onClick={event => {
       const element = event.currentTarget;

@@ -27,7 +27,7 @@ describe("Bar graphs", () => {
     fireEvent.keyDown(screen.getByRole("slider", { name: "Graph 1 bar 1" }), { key: "End" });
     expect(screen.getByRole("slider", { name: "Graph 1 bar 2" })).toHaveAttribute("aria-valuenow", "0");
     fireEvent.click(second);
-    expect(screen.queryByRole("slider")).toBeNull();
+    expect(screen.queryByRole("slider", { name: /^Graph / })).toBeNull();
     fireEvent.click(first);
     expect(screen.getByLabelText("Graph 1 X axis title")).toHaveValue("Months");
     expect(screen.getByLabelText("Graph 1 Y axis title")).toHaveValue("Completion");

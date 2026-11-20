@@ -1,3 +1,0 @@
-CREATE POLICY "Owners read their videos" ON storage.objects FOR SELECT TO authenticated USING (bucket_id = 'board-videos' AND (storage.foldername(name))[1] = (auth.jwt() ->> 'sub'));
-CREATE POLICY "Owners upload their videos" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = 'board-videos' AND (storage.foldername(name))[1] = (auth.jwt() ->> 'sub'));
-CREATE POLICY "Owners delete their videos" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = 'board-videos' AND (storage.foldername(name))[1] = (auth.jwt() ->> 'sub'));

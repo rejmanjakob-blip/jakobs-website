@@ -55,7 +55,7 @@ describe("Dashboard subtabs", () => {
     vi.useFakeTimers(); render(<GlowBoard />);
     fireEvent.click(screen.getByRole("tab", { name: "Dashboard 1: Title" }));
     const panel = screen.getByRole("tabpanel");
-    const targets = [document.body, screen.getByRole("button", { name: "Save all tabs" }),
+    const targets = [document.body, screen.getByRole("button", { name: /Save slots/ }),
       within(panel).getByRole("button", { name: "Insert pictures" }),
       within(panel).getByRole("group", { name: "Progress box 1" }),
       within(panel).getByRole("group", { name: "Paragraph box 1" }),

@@ -3,71 +3,61 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { initialBoard } from "@/lib/board-state";
 import { useBoardPersistence } from "@/hooks/use-board-persistence";
 
-const api = vi.hoisted(() => ({ user: vi.fn(), write: vi.fn(), read: vi.fn() }));
-vi.mock("@/lib/session", () => ({ $getSessionUser: api.user }));
-vi.mock("@/lib/board-saves.functions", () => ({ writeBoardSave: api.write, readBoardSave: api.read }));
-afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); localStorage.clear(); });
+const api = vi.hoisted(() => ({ write: vi.fn(), read: vi.fn(), last: vi.fn(() => 1), remember: vi.fn() }));
+vi.mock("@/lib/local-saves", () => ({ writeSave: api.write, readSave: api.read, lastSlot: api.last, rememberSlot: api.remember }));
+afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe("Opened-slot autosave", () => {
-  it("autosaves edits to the opened slot, defaulting to slot 1", async () => {
-    vi.useFakeTimers(); api.user.mockResolvedValue({ userId: "owner" }); api.read.mockRejectedValue(new Error("empty"));
-    api.write.mockResolvedValue({ slot: 4, saved_at: "2026-11-09" });
+  it("opens the last-used slot and autosaves edits to it", async () => {
+    vi.useFakeTimers(); api.last.mockReturnValueOnce(3);
+    const saved = { ...initialBoard(), active: 2 };
+    api.read.mockResolvedValue(saved); api.write.mockResolvedValue({ slot: 3, saved_at: "now" });
+    const restore = vi.fn();
+    const { result, rerender } = renderHook(({ board }) => useBoardPersistence(board, restore), { initialProps: { board: initialBoard() } });
+    await act(async () => {});
+    expect(api.read).toHaveBeenCalledWith(3);
+    expect(restore).toHaveBeenCalledWith(saved);
+    expect(result.current.slot).toBe(3);
+    const edited = { ...saved, active: 4 };
+    rerender({ board: edited });
+    expect(result.current.status).toBe("saving");
+    await act(async () => { vi.advanceTimersByTime(700); });
+    expect(api.write).toHaveBeenCalledWith(3, edited, true);
+    expect(result.current.status).toBe("saved");
+  });
+  it("starts an empty slot without writing until something changes", async () => {
+    vi.useFakeTimers(); api.read.mockResolvedValue(null);
+    const restore = vi.fn();
     const board = initialBoard();
-    const { result, rerender } = renderHook(({ snapshot }) => useBoardPersistence(snapshot, vi.fn()), { initialProps: { snapshot: board } });
+    const { result } = renderHook(() => useBoardPersistence(board, restore));
     await act(async () => {});
-    await act(async () => { vi.advanceTimersByTime(1000); });
-    expect(api.write).not.toHaveBeenCalled();
-    expect(result.current.slot).toBe(1);
-    act(() => result.current.selectSlot(4, board));
-    const changed = { ...board, active: 3, homeView: { zoom: 1.4, x: 50, y: 20 } };
-    rerender({ snapshot: changed });
-    await act(async () => { vi.advanceTimersByTime(5000); await result.current.flush(); });
-    expect(api.write).toHaveBeenCalledTimes(1);
-    expect(api.write.mock.calls[0]?.[0].data.slot).toBe(4);
-  });
-  it("restores the same user's draft into slot 1 when slot 1 is empty", async () => {
-    vi.useFakeTimers(); api.user.mockResolvedValue({ userId: "owner" }); api.read.mockRejectedValue(new Error("empty")); api.write.mockResolvedValue({ slot: 1 });
-    const stored = { ...initialBoard(), active: 2, activeSubtab: 0, homeView: { zoom: 1.8, x: -30, y: 12 } };
-    localStorage.setItem("glow-board-resume:owner", JSON.stringify({ slot: 7, board: stored, scroll: 0 }));
-    const restore = vi.fn();
-    const { result } = renderHook(() => useBoardPersistence(initialBoard(), restore));
-    await act(async () => {});
-    expect(restore).toHaveBeenCalledWith(stored);
-    expect(result.current.slot).toBe(1);
-  });
-  it("opens slot 1's save on start, ignoring a draft from another slot", async () => {
-    api.user.mockResolvedValue({ userId: "owner" });
-    const slotOne = { ...initialBoard(), active: 5 };
-    api.read.mockResolvedValue(slotOne);
-    localStorage.setItem("glow-board-resume:owner", JSON.stringify({ slot: 7, board: initialBoard() }));
-    const restore = vi.fn();
-    const { result } = renderHook(() => useBoardPersistence(initialBoard(), restore));
-    await act(async () => {});
-    expect(api.read).toHaveBeenCalledWith({ data: 1 });
-    expect(restore).toHaveBeenCalledWith(slotOne);
-    expect(result.current.slot).toBe(1);
-  });
-  it("never restores another user's draft", async () => {
-    api.user.mockResolvedValue({ userId: "other" }); api.read.mockRejectedValue(new Error("empty"));
-    localStorage.setItem("glow-board-resume:owner", JSON.stringify({ slot: 7, board: initialBoard() }));
-    const restore = vi.fn();
-    renderHook(() => useBoardPersistence(initialBoard(), restore));
-    await act(async () => {});
+    await act(async () => { vi.advanceTimersByTime(2000); });
     expect(restore).not.toHaveBeenCalled();
+    expect(result.current.slot).toBe(1);
+    expect(api.write).not.toHaveBeenCalled();
+  });
+  it("never autosaves over a slot that failed to open", async () => {
+    vi.useFakeTimers(); api.read.mockRejectedValue(new Error("corrupt"));
+    const { result, rerender } = renderHook(({ board }) => useBoardPersistence(board, vi.fn()), { initialProps: { board: initialBoard() } });
+    await act(async () => {});
+    expect(result.current.slot).toBeNull();
+    expect(result.current.status).toBe("error");
+    rerender({ board: { ...initialBoard(), active: 1 } });
+    await act(async () => { vi.advanceTimersByTime(2000); });
+    expect(api.write).not.toHaveBeenCalled();
   });
   it("queues writes so an older change cannot finish after a newer one", async () => {
-    api.user.mockResolvedValue(null);
-    let complete: ((value: { slot: number; saved_at: string }) => void) | undefined;
-    api.write.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; })).mockResolvedValueOnce({ slot: 2 });
-    const board = initialBoard();
-    const { result } = renderHook(() => useBoardPersistence(board, vi.fn()));
+    api.read.mockResolvedValue(null);
+    const order: string[] = [];
+    let release!: () => void;
+    api.write.mockImplementationOnce(() => new Promise(resolve => { release = () => { order.push("first"); resolve({ slot: 1, saved_at: "a" }); }; }))
+      .mockImplementationOnce(async () => { order.push("second"); return { slot: 1, saved_at: "b" }; });
+    const { result } = renderHook(() => useBoardPersistence(initialBoard(), vi.fn()));
     await act(async () => {});
-    const first = result.current.write({ slot: 2, snapshot: board, overwrite: true });
-    const second = result.current.write({ slot: 2, snapshot: { ...board, active: 9 }, overwrite: true });
+    const first = result.current.write({ slot: 1, snapshot: initialBoard(), overwrite: true });
+    const second = result.current.write({ slot: 1, snapshot: initialBoard(), overwrite: true });
     await act(async () => {});
-    expect(api.write).toHaveBeenCalledTimes(1);
-    await act(async () => { complete?.({ slot: 2, saved_at: "now" }); await first; await second; });
-    expect(api.write).toHaveBeenCalledTimes(2);
-    expect(api.write.mock.calls[1]?.[0].data.snapshot.active).toBe(9);
+    await act(async () => { release(); await Promise.all([first, second]); });
+    expect(order).toEqual(["first", "second"]);
   });
 });

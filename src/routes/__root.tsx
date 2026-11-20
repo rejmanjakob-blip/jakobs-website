@@ -11,7 +11,6 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -39,9 +38,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -78,15 +74,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
+      // Private board: ask search engines and crawlers not to index or follow anything.
+      { name: "robots", content: "noindex, nofollow, noarchive" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Glow Progress Board" },
       { name: "description", content: "Personal progress dashboards with notes and background photos." },
-      { name: "author", content: "Lovable" },
       { property: "og:title", content: "Glow Progress Board" },
       { property: "og:description", content: "Personal progress dashboards with notes and background photos." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -102,13 +98,37 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+/**
+ * Turns off spellcheck, autocorrect, auto-capitalisation and the browser's suggestion dropdown
+ * on every text field, including ones added later, as soon as it is focused.
+ */
+function NoTypingSuggestions() {
+  useEffect(() => {
+    const quiet = (field: Element) => {
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+      field.spellcheck = false;
+      field.setAttribute("autocomplete", "off");
+      field.setAttribute("autocorrect", "off");
+      field.setAttribute("autocapitalize", "off");
+      field.setAttribute("data-gramm", "false");
+    };
+    document.querySelectorAll("input, textarea").forEach(quiet);
+    const onFocus = (event: FocusEvent) => { if (event.target instanceof Element) quiet(event.target); };
+    document.addEventListener("focusin", onFocus, true);
+    return () => document.removeEventListener("focusin", onFocus, true);
+  }, []);
+  return null;
+}
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // spellCheck on <html> is inherited by every text field: no red underlines anywhere.
+    <html lang="en" spellCheck={false}>
       <head>
         <HeadContent />
       </head>
       <body>
+        <NoTypingSuggestions />
         {children}
         <Scripts />
       </body>

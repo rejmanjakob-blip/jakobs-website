@@ -210,7 +210,7 @@
   .board-navigation { display: flex; align-items: flex-start; gap: 8px; padding: 16px 16px 0; background: var(--background); position: relative; z-index: 20; }
   .home-button { width: 28px; height: 24px; flex-shrink: 0; padding: 3px; }
   .board-tabs { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-  .board-tab { width: max-content; max-width: 100%; height: auto; min-height: 24px; padding: 2px 6px; font-size: 10px; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+  .board-tab { width: max-content; max-width: 100%; height: auto; min-height: 24px; padding: 2px 6px; font-size: 12px !important; font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
   .board-tab[aria-selected="true"] { font-weight: 600; }
   .board-tab[data-drag-parent] { cursor: ew-resize; touch-action: none; user-select: none; }
   .board-tab[data-drag-child] { cursor: ns-resize; touch-action: none; user-select: none; }
@@ -227,6 +227,17 @@
   .save-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 8px; font-size: 10px; }
   .save-message { font-size: 10px; padding-top: 8px; overflow-wrap: anywhere; }
   .save-status { position: absolute; top: 32px; right: 0; width: max-content; max-width: calc(100vw - 32px); padding: 6px; font-size: 10px; }
+  .save-button svg { width: 14px; height: 14px; }
+  .save-button[data-status="error"] { border-style: dashed; }
+  .save-help { font-size: 10px; line-height: 1.4; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  .save-slot[data-current] { font-weight: 600; }
+  .board-add { gap: 2px; }
+  .board-add svg { width: 14px; height: 14px; }
+  .help-panel { position: fixed; z-index: 60; top: 64px; right: 16px; width: 360px; max-width: calc(100vw - 32px); max-height: calc(100dvh - 80px); overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .help-panel dl { display: flex; flex-direction: column; gap: 8px; font-size: 12px; line-height: 1.45; }
+  .help-panel dt { font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+  .help-panel dd { margin: 0; opacity: 0.85; }
+  @media (max-width: 640px) { .save-label { display: none; } }
   .board-tab:hover, .board-tab[aria-selected="true"], .home-button:hover, .home-button[aria-pressed="true"] { background: var(--background); color: var(--foreground); }
   .home-moon, .home-moon:hover { border: 0; box-shadow: none; background: transparent; color: var(--foreground); }
   .photo-layer-centered { inset: auto; left: 50%; top: 50%; width: 0; height: 0; overflow: visible; }
@@ -248,7 +259,6 @@ textarea:focus::-webkit-scrollbar { display: block; width: 4px; }
 .home-moon svg { width: 100%; height: 100%; }
 .home-moon svg, .home-moon svg * { pointer-events: none; }
 .home-moon svg path { pointer-events: fill; cursor: pointer; }
-.home-dragon { position: absolute; z-index: 1; left: 50%; top: calc(50% + min(160px, 36vw) + 8px); width: min(240px, 64vw); transform: translateX(-50%); }
 .photo-options:has(> .home-moon) { pointer-events: none; }
 
 /* Inserted progress / paragraph boxes and their insert symbols */
@@ -271,3 +281,17 @@ button, [role="button"], [role="checkbox"], .glow-button, .board-save, .board-ta
 .floating-box[data-box-mode] { padding: 6px; }
 .progress-title-rigid { position: relative; }
 .progress-title-rigid > textarea { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0 0 2px; }
+
+/* No accidental text selection: page text is never selectable, only text fields are. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
+html.is-dragging, html.is-dragging * { -webkit-user-select: none !important; user-select: none !important; }
+img, video { -webkit-user-drag: none; -webkit-touch-callout: none; }
+.progress-title textarea:not(:focus), .box-title:not(:focus) { cursor: grab; }
+html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.is-dragging .box-title { cursor: grabbing; }
+
+/* Inner-box text size grip: a small corner tick that appears while hovering a box's inner area. */
+.inner-scale-grip { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; z-index: 2; cursor: nwse-resize; touch-action: none;
+  border-right: 1.5px solid var(--foreground); border-bottom: 1.5px solid var(--foreground); opacity: 0; transition: opacity 120ms; }
+.inner-box:hover > .inner-scale-grip, .inner-scale-grip:focus-visible, .inner-scale-grip:active { opacity: 1; }
+@media (hover: none) { .inner-scale-grip { opacity: 0.6; } }

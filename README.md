@@ -1,29 +1,25 @@
-# Welcome to your Lovable project
+# Glow Progress Board
 
-This project was built with [Lovable](https://lovable.dev).
+Personal progress dashboards with progress bars, notes, graphs, pictures and videos.
 
-## Build with Lovable
-
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+## Run it on this computer
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+bun run dev
 ```
+
+Then open http://localhost:8080.
+
+## Where your saves live
+
+While the site runs on this computer, every change autosaves to the `saves/` folder in this project
+(`saves/slot-1.json` … `saves/slot-10.json`, uploaded videos in `saves/videos/`).
+That folder is git-ignored, so it is never pushed to GitHub. Copy it somewhere safe to back up your boards.
+
+The deployed site (for example on Vercel) has no access to this folder, so there the board saves in
+that browser on that device instead.
 
 ## Built with
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+TanStack Start, React, TypeScript, Tailwind CSS.

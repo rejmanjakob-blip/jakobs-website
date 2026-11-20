@@ -1,30 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { useHydrated } from "@tanstack/react-router";
-import { Save, FolderOpen, Check, LoaderCircle } from "lucide-react";
+import { Save, Check, LoaderCircle, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { listBoardSaves, readBoardSave } from "@/lib/board-saves.functions";
+import { listSaves, readSave, saveLocation, SlotTakenError } from "@/lib/local-saves";
 import { useBoardPersistence } from "@/hooks/use-board-persistence";
 import type { BoardState, SaveSlot } from "@/lib/board-state";
 
-export function BoardSaveMenu({ snapshot, onRestore, opening = null }: { snapshot: BoardState; onRestore: (state: BoardState) => void; opening?: BoardState | null }) {
+const SLOTS = Array.from({ length: 10 }, (_, i) => i + 1);
+
+export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; onRestore: (state: BoardState) => void }) {
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [where, setWhere] = useState<"folder" | "browser" | null>(null);
   const [confirm, setConfirm] = useState<{ slot: number; action: "overwrite" | "load" } | null>(null);
-  const persistence = useBoardPersistence(snapshot, onRestore, opening);
-  const lastSlot = persistence.slot;
-  const [ask, setAsk] = useState(false);
+  const persistence = useBoardPersistence(snapshot, onRestore);
   const root = useRef<HTMLDivElement>(null);
-  const hover = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lock = useRef(false);
-  const cancelHover = () => { if (hover.current) clearTimeout(hover.current); hover.current = null; };
+  const close = () => { setOpen(false); setConfirm(null); setMessage(""); };
   useEffect(() => {
-    const dismiss = (event: PointerEvent) => { if (root.current && !root.current.contains(event.target as Node)) { cancelHover(); setOpen(false); setConfirm(null); setAsk(false); setMessage(""); } };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { cancelHover(); setOpen(false); setConfirm(null); } };
+    const dismiss = (event: PointerEvent) => { if (root.current && !root.current.contains(event.target as Node)) close(); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("pointerdown", dismiss); document.addEventListener("keydown", escape);
-    return () => { cancelHover(); document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
+    return () => { document.removeEventListener("pointerdown", dismiss); document.removeEventListener("keydown", escape); };
   }, []);
   const run = async (action: () => Promise<void>) => {
     if (lock.current) return;
@@ -32,47 +32,58 @@ export function BoardSaveMenu({ snapshot, onRestore, opening = null }: { snapsho
     try { await action(); } catch (error) { setOpen(true); setMessage(error instanceof Error ? error.message : "Could not access saves."); }
     finally { lock.current = false; setBusy(false); }
   };
-  const reveal = () => { setOpen(true); void run(async () => { setSlots(await listBoardSaves()); }); };
+  const toggle = () => {
+    if (open) return close();
+    setOpen(true);
+    void run(async () => { const [list, kind] = await Promise.all([listSaves(), saveLocation()]); setSlots(list); setWhere(kind); });
+  };
   const save = (slot: number, overwrite: boolean) => void run(async () => {
     await persistence.flush();
-    const saved = await persistence.write({ slot, snapshot, overwrite });
-    setSlots(previous => [...previous.filter(item => item.slot !== slot), saved].sort((a, b) => a.slot - b.slot));
-    persistence.selectSlot(slot, snapshot); setConfirm(null); setAsk(false); setMessage(`Saved · Slot ${slot}`);
+    try {
+      const saved = await persistence.write({ slot, snapshot, overwrite });
+      setSlots(previous => [...previous.filter(item => item.slot !== slot), saved].sort((a, b) => a.slot - b.slot));
+      persistence.selectSlot(slot, snapshot); setConfirm(null); setMessage(`Saved to slot ${slot}. Changes now autosave there.`);
+    } catch (error) {
+      if (error instanceof SlotTakenError) setConfirm({ slot, action: "overwrite" });
+      else throw error;
+    }
   });
-  const quickSave = () => { cancelHover(); void run(async () => {
-    const current = await listBoardSaves(); setSlots(current);
-    const available = Array.from({ length: 10 }, (_, i) => i + 1).find(slot => !current.some(item => item.slot === slot));
-    if (!available) { setOpen(true); setMessage("All slots saved. Choose one to overwrite."); return; }
-    const saved = await persistence.write({ slot: available, snapshot, overwrite: false });
-    setSlots([...current, saved]); persistence.selectSlot(available, snapshot); setMessage(`Saved · Slot ${available}`);
-  }); };
+  const load = (slot: number) => void run(async () => {
+    // Store what's on screen first, so switching slots never loses the latest edits.
+    if (persistence.slot !== null) await persistence.write({ slot: persistence.slot, snapshot, overwrite: true });
+    await persistence.flush();
+    const restored = await readSave(slot);
+    if (!restored) throw new Error(`Slot ${slot} is empty.`);
+    persistence.selectSlot(slot, restored); onRestore(restored); close();
+  });
+  const { status, slot: activeSlot } = persistence;
+  const label = status === "loading" ? "Opening…" : status === "saving" ? "Saving…" : status === "error" ? "Not saved" : activeSlot ? `Saved · slot ${activeSlot}` : "Saved";
+
   return <div ref={root} className="board-save" data-ready={hydrated}>
-    <Button variant="outline" size="icon" className="glow-button h-6 w-7 p-1" aria-label="Save all tabs" title="Save all tabs" aria-expanded={open} aria-controls="save-slots" disabled={busy}
-      onPointerEnter={() => { cancelHover(); hover.current = setTimeout(reveal, 1001); }} onPointerLeave={cancelHover}
-      onClick={() => { if (lastSlot === null) quickSave(); else { cancelHover(); setMessage(""); setAsk(true); } }} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); reveal(); } }}>
-      {busy ? <LoaderCircle className="animate-spin" /> : <Save />}
+    <Button variant="outline" className="glow-button save-button h-6 gap-1 px-1.5 text-[11px] font-normal" aria-label={`Save slots (${label})`} aria-expanded={open} aria-controls="save-slots"
+      title="Your board saves automatically. Click to see save slots." onClick={toggle} data-status={status}>
+      {busy || status === "saving" || status === "loading" ? <LoaderCircle className="animate-spin" /> : status === "error" ? <TriangleAlert /> : <Save />}
+      <span className="save-label">{label}</span>
     </Button>
-    {ask && lastSlot !== null && !open && <div role="dialog" aria-label="Overwrite last slot" className="save-status glow-box flex items-center gap-1">
-      <span>Overwrite slot {lastSlot}?</span>
-      <Button variant="outline" className="glow-button h-6 px-1 text-[10px]" disabled={busy} onClick={() => save(lastSlot, true)}>Yes</Button>
-      <Button variant="outline" className="glow-button h-6 px-1 text-[10px]" onClick={() => setAsk(false)}>No</Button>
-    </div>}
-    {!open && !ask && (message || persistence.error) && <div role="status" className="save-status glow-box">{persistence.error || message}</div>}
-    {open && <section id="save-slots" aria-label="Saved slots" className="save-menu glow-box">
-      {Array.from({ length: 10 }, (_, i) => i + 1).map(slot => {
+    {!open && persistence.error && <div role="status" className="save-status glow-box">{persistence.error}</div>}
+    {open && <section id="save-slots" aria-label="Save slots" className="save-menu glow-box">
+      <p className="save-help">
+        Every change autosaves to {activeSlot ? <b>slot {activeSlot}</b> : "the slot you pick"}.
+        {where === "folder" ? " Saves are files in the project's saves folder on this computer." : where === "browser" ? " Saves are kept in this browser on this device." : ""}
+      </p>
+      {SLOTS.map(slot => {
         const saved = slots.find(item => item.slot === slot);
-        return <div key={slot} className="save-slot">
-          <div className="min-w-0"><span>Slot {slot}</span><span className="save-time">{saved ? new Date(saved.saved_at).toLocaleString() : "Empty"}</span></div>
-          {saved && <Button variant="outline" size="icon" className="glow-button h-6 w-6 p-1" disabled={busy} aria-label={`Load slot ${slot}`} title="Load" onClick={() => setConfirm({ slot, action: "load" })}><FolderOpen /></Button>}
-          <Button variant="outline" size="icon" className="glow-button h-6 w-6 p-1" disabled={busy} aria-label={`${saved ? "Overwrite" : "Save to"} slot ${slot}`} title={saved ? "Overwrite" : "Save"} onClick={() => saved ? setConfirm({ slot, action: "overwrite" }) : save(slot, false)}><Save /></Button>
+        const current = slot === activeSlot;
+        return <div key={slot} className="save-slot" data-current={current || undefined}>
+          <div className="min-w-0"><span>Slot {slot}{current ? " · in use" : ""}</span><span className="save-time">{saved ? `Saved ${new Date(saved.saved_at).toLocaleString()}` : "Empty"}</span></div>
+          {saved && !current && <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" disabled={busy} aria-label={`Open slot ${slot}`} onClick={() => setConfirm({ slot, action: "load" })}>Open</Button>}
+          {!current && <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" disabled={busy} aria-label={`Save to slot ${slot}`} onClick={() => saved ? setConfirm({ slot, action: "overwrite" }) : save(slot, false)}>Save here</Button>}
         </div>;
       })}
-      {confirm && <div className="save-confirm"><span>{confirm.action === "load" ? "Replace current edits" : "Overwrite save"} · Slot {confirm.slot}?</span>
-        <Button variant="outline" size="icon" className="glow-button h-6 w-6 p-1" aria-label="Confirm" disabled={busy} onClick={() => {
-          if (confirm.action === "overwrite") save(confirm.slot, true);
-          else void run(async () => { await persistence.flush(); const restored = await readBoardSave({ data: confirm.slot }); persistence.selectSlot(confirm.slot, restored); onRestore(restored); setConfirm(null); setOpen(false); setMessage(""); });
-        }}><Check /></Button>
-        <Button variant="outline" className="glow-button h-6 px-1 text-[10px]" onClick={() => setConfirm(null)}>Cancel</Button>
+      {confirm && <div className="save-confirm" role="alertdialog" aria-label="Confirm">
+        <span>{confirm.action === "load" ? `Open slot ${confirm.slot}? What's on screen stays saved in slot ${activeSlot ?? "-"}.` : `Replace what's saved in slot ${confirm.slot}?`}</span>
+        <Button variant="outline" className="glow-button h-6 gap-1 px-1.5 text-[10px]" disabled={busy} onClick={() => confirm.action === "overwrite" ? save(confirm.slot, true) : load(confirm.slot)}><Check />Yes</Button>
+        <Button variant="outline" className="glow-button h-6 px-1.5 text-[10px]" onClick={() => setConfirm(null)}>Cancel</Button>
       </div>}
       {message && <p role="status" className="save-message">{message}</p>}
     </section>}
