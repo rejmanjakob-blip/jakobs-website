@@ -304,7 +304,7 @@ const HELP: [string, string][] = [
   ["Progress", "Hold a progress bar for 4 seconds to switch between a bar and checkboxes."],
   ["Graphs", "Double tap the bottom axis to add a bar, triple tap to remove one. Double tap the side axis for fractions."],
   ["Saving", "Everything saves automatically. The save button shows the slot in use; click it to keep copies in other slots."],
-  ["Videos", "Videos start silent and only play while on screen and big enough, so phones stay cool. Hover or tap a video for play/pause, sound on/off and a volume slider. The speaker in the top bar silences every video on this device."],
+  ["Videos", "Video upload is not available right now. Videos start silent and only play while on screen and big enough. The speaker in the top bar silences every video on this device."],
   ["Undo", "The arrow button or Ctrl+Z undoes your last 3 changes. The eye hides pictures and videos."],
 ];
 

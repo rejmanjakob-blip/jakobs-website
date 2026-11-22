@@ -315,12 +315,13 @@ function BoardVideo({ path, style, sound, selected, onSound }: { path: string; s
   </>;
 }
 
-export function InsertVideo({ editor }: { editor: Editor }) {
-  const input = useRef<HTMLInputElement>(null);
+/** Video uploads are switched off for now (no cross-device video storage yet). */
+export function InsertVideo(_props: { editor: Editor }) {
   return <section className="photo-options w-[68.2667px] max-w-[10.1333vw] self-end text-center" aria-label="Video options">
-    <Button variant="outline" aria-label="Insert videos" title="Insert videos" className="glow-button mx-auto flex aspect-square h-auto w-full p-1" onClick={() => input.current?.click()}>
-      <span className="video-symbol" aria-hidden="true"><span /></span>
+    <Button variant="outline" aria-disabled="true" aria-label="Video upload not available rn" title="Video upload not available rn"
+      className="glow-button mx-auto flex aspect-square h-auto w-full cursor-not-allowed whitespace-normal p-1 opacity-60 hover:bg-background hover:text-foreground"
+      onClick={() => toast("Video upload not available rn")}>
+      <span className="text-[7px] font-normal leading-tight">Video upload not available rn</span>
     </Button>
-    <input ref={input} type="file" accept="video/*" multiple className="hidden" onChange={event => { editor.addVideo(event.target.files); event.target.value = ""; }} />
   </section>;
 }
