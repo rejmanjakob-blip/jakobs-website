@@ -42,6 +42,7 @@ function loginPage(status: number, wrong: boolean, next: string) {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Glow Progress Board</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
