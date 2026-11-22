@@ -309,7 +309,7 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
 
 /* Same layout on phones as on laptops: the app fills exactly the visible screen, the top bar is one row
    that stays at the top (swipe it sideways when tabs don't fit), and zoom buttons sit above the home bar. */
-.board-shell { height: 100vh; height: 100dvh; }
+.board-shell { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: 100vh; height: var(--vv-height, 100dvh); }
 .board-navigation { flex-shrink: 0; padding-top: max(16px, env(safe-area-inset-top)); padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 .zoom-controls { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); }
 @media (max-width: 767px) {

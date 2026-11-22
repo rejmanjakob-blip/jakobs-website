@@ -57,6 +57,7 @@ export function GlowBoard() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
   useNoAccidentalSelection();
+  useVisibleScreen();
   const [helpOpen, setHelpOpen] = useState(false);
   // One stable updater for every dashboard, so unchanged tabs can skip re-rendering.
   const updateDashboard = useCallback((index: number, child: number | null, update: (state: DashboardState) => DashboardState) => setBoard(previous => ({
@@ -276,6 +277,34 @@ function HorusEye({ closed }: { closed: boolean }) {
 }
 
 const EDITABLE = "input, textarea, [contenteditable='true']";
+/**
+ * Keeps the app sized and placed to the part of the screen you can actually see. When a phone keyboard
+ * opens, iPhones shrink and shift the visible area instead of the page; following it keeps the top bar
+ * and zoom buttons on screen while typing.
+ */
+function useVisibleScreen() {
+  useEffect(() => {
+    const view = window.visualViewport;
+    if (!view) return;
+    const root = document.documentElement;
+    let frame = 0;
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // While someone pinch-zooms, leave the layout alone.
+        if (view.scale > 1.01) return;
+        root.style.setProperty("--vv-height", `${view.height}px`);
+        root.style.setProperty("--vv-top", `${view.offsetTop}px`);
+        // iOS may still scroll the page behind the fixed app; put it back.
+        if (window.scrollY !== 0 && view.scale === 1) window.scrollTo(0, 0);
+      });
+    };
+    sync();
+    view.addEventListener("resize", sync);
+    view.addEventListener("scroll", sync);
+    return () => { cancelAnimationFrame(frame); view.removeEventListener("resize", sync); view.removeEventListener("scroll", sync); };
+  }, []);
+}
 /** While a press-and-drag that started outside a text field is in progress, nothing on the page can get text-selected. */
 function useNoAccidentalSelection() {
   useEffect(() => {
