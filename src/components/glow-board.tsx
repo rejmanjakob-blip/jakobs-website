@@ -90,7 +90,7 @@ export function GlowBoard() {
     setBoard(previous => child === null ? reorderParent(previous, parent, target) : reorderSubtab(previous, parent, child, target));
     setPinnedParent(child === null ? target : parent);
     setHoveredParent(null);
-  }, cancelDeleteHold);
+  }, () => { cancelDeleteHold(); cancelParentHold(); setHoveredParent(null); });
   const [parentPrompt, setParentPrompt] = useState(false);
   const [hideMedia, setHideMedia] = useState(false);
   // Device-wide sound switch, remembered in this browser (e.g. keep a phone silent in public).
@@ -117,6 +117,7 @@ export function GlowBoard() {
           onFocus={event => revealSubtabs(index, event.currentTarget)} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHoveredParent(null); }}>
           <Button variant="outline" role="tab" id={`board-tab-${index}`} data-no-subtab-prompt data-drag-parent={index}
            data-drag-target={tabDrag.target?.child === null && tabDrag.target.target === index ? true : undefined}
+           data-lifted={tabDrag.lifted === index ? true : undefined}
            onPointerDown={event => { tabDrag.start(event, index); cancelParentHold(); if (index === titles.length - 1) parentTimer.current = setTimeout(() => setParentPrompt(true), 3000); }}
            onPointerUp={cancelParentHold} onPointerLeave={cancelParentHold} onPointerCancel={cancelParentHold}
           aria-label={`Dashboard ${index + 1}: ${title || "Title"}`} aria-selected={active === index}
@@ -295,7 +296,7 @@ function useNoAccidentalSelection() {
 }
 
 const HELP: [string, string][] = [
-  ["Tabs", "Click a tab to open it, then type its name at the top. Drag tabs sideways to reorder them. + adds a tab."],
+  ["Tabs", "Click a tab to open it, then type its name at the top. Drag tabs sideways to reorder them (on a phone: press and hold a tab until it lifts, then drag; swipe the row to see more tabs). + adds a tab."],
   ["Sub tabs", "Click an open tab to see its sub tabs and + sub tab. Drag them up or down to reorder; hold one for 3 seconds to delete it."],
   ["Add things", "The square buttons on the right of a dashboard add pictures, videos, a bar graph, a progress bar or a note."],
   ["Move & resize", "Drag boxes (by their edge or title) and pictures to move them. Drag a box corner to resize the box. Hover the inner area and drag its small corner tick to make the title and text inside bigger or smaller (double-click the tick to reset). Click a title to edit it. Drag the empty background to pan and scroll to zoom (home has + and − buttons)."],

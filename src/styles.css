@@ -320,3 +320,6 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
   .board-tabs .board-tab { white-space: nowrap; }
 }
 @media (min-width: 768px) { .board-navigation { padding-top: max(24px, env(safe-area-inset-top)); padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); } }
+
+/* Phone tab reordering: a held tab lifts (grows and glows) to show it can now be dragged. */
+.board-tab[data-lifted] { transform: scale(1.12); box-shadow: 0 0 14px var(--foreground); z-index: 5; position: relative; transition: transform 120ms, box-shadow 120ms; }
