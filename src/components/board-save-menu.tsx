@@ -8,7 +8,7 @@ import type { BoardState, SaveSlot } from "@/lib/board-state";
 
 const SLOTS = Array.from({ length: 10 }, (_, i) => i + 1);
 
-export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; onRestore: (state: BoardState) => void }) {
+export function BoardSaveMenu({ snapshot, onRestore, onMerge }: { snapshot: BoardState; onRestore: (state: BoardState) => void; onMerge?: (update: (state: BoardState) => BoardState) => void }) {
   const hydrated = useHydrated();
   const [open, setOpen] = useState(false);
   const [slots, setSlots] = useState<SaveSlot[]>([]);
@@ -16,7 +16,7 @@ export function BoardSaveMenu({ snapshot, onRestore }: { snapshot: BoardState; o
   const [message, setMessage] = useState("");
   const [where, setWhere] = useState<SaveLocation | null>(null);
   const [confirm, setConfirm] = useState<{ slot: number; action: "overwrite" | "load" } | null>(null);
-  const persistence = useBoardPersistence(snapshot, onRestore);
+  const persistence = useBoardPersistence(snapshot, onRestore, onMerge);
   useEffect(() => { void saveLocation().then(setWhere, () => {}); }, []);
   const root = useRef<HTMLDivElement>(null);
   const lock = useRef(false);

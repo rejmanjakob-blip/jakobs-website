@@ -31,6 +31,11 @@ export const cloudList = createServerFn({ method: "GET" }).handler(async () => {
   return slots.map((slot, i) => ({ slot, version: Number(rows[i * 2] ?? 0), saved_at: rows[i * 2 + 1] ?? "" })).filter(row => row.version > 0);
 });
 
+export const cloudVersion = createServerFn({ method: "GET" }).inputValidator(slotSchema).handler(async ({ data: slot }) => {
+  const { redis } = await server();
+  return Number((await redis<string | null>(["GET", `glow:slotv:${slot}`])) ?? 0);
+});
+
 export const cloudRead = createServerFn({ method: "GET" }).inputValidator(slotSchema).handler(async ({ data: slot }) => {
   const { pipeline } = await server();
   const [json, version] = await pipeline<string | null>([["GET", `glow:slot:${slot}`], ["GET", `glow:slotv:${slot}`]]);

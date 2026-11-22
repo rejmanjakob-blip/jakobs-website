@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { BoardState } from "@/lib/board-state";
+import { mergeBoards, type BoardState } from "@/lib/board-state";
 import { lastSlot, readSave, rememberSlot, SaveConflictError, slotVersion, writeSave } from "@/lib/local-saves";
 
 export type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
@@ -8,11 +8,13 @@ export type SaveStatus = "loading" | "saving" | "saved" | "error" | "conflict";
  * Opens the slot this browser last used (slot 1 the first time), then autosaves every
  * change to that slot. Writes are queued so manual saves and autosaves never overlap.
  *
- * With cloud saving, each write says which version it was based on. If another device saved
- * in between, the write is refused and the person chooses: load the latest, or keep theirs.
- * Coming back to the tab quietly loads newer edits from other devices when nothing here is unsaved.
+ * With cloud saving, each write says which version it was based on. If another browser saved in
+ * between, its newer save is merged into what's on screen (see mergeBoards) and saving carries on;
+ * nobody is asked. Every 15 seconds, and when the tab is shown again, newer saves from other
+ * browsers are pulled in the same way. The "which version?" prompt is only a fallback if merging fails.
  */
-export function useBoardPersistence(snapshot: BoardState, onRestore: (board: BoardState) => void) {
+const POLL_MS = 15_000;
+export function useBoardPersistence(snapshot: BoardState, onRestore: (board: BoardState) => void, onMerge: (update: (board: BoardState) => BoardState) => void = () => {}) {
   const [slot, setSlot] = useState<number | null>(null);
   const [status, setStatus] = useState<SaveStatus>("loading");
   const [error, setError] = useState("");
@@ -27,6 +29,9 @@ export function useBoardPersistence(snapshot: BoardState, onRestore: (board: Boa
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const restore = useRef(onRestore);
   restore.current = onRestore;
+  const merge = useRef(onMerge);
+  merge.current = onMerge;
+  const merging = useRef(false);
 
   const applyLoaded = (target: number, loaded: { board: BoardState; version: number } | null) => {
     if (loaded) { latest.current = loaded.board; restore.current(loaded.board); version.current = loaded.version; }
@@ -52,6 +57,22 @@ export function useBoardPersistence(snapshot: BoardState, onRestore: (board: Boa
     queue.current = task;
     return task;
   };
+  /** Pulls the newest save of the active slot and folds it into what's on screen. */
+  const pullRemote = async (target: number) => {
+    if (merging.current) return;
+    merging.current = true;
+    try {
+      const loaded = await readSave(target);
+      if (!loaded || activeSlot.current !== target) return;
+      if (latest.current === saved.current) { applyLoaded(target, loaded); return; }
+      // Unsaved edits here: merge them with the other browser's save; autosave then writes the result.
+      const base = saved.current ?? loaded.board;
+      const theirs = loaded.board;
+      saved.current = theirs; version.current = loaded.version; conflict.current = false;
+      merge.current(board => mergeBoards(base, board, theirs));
+      setStatus("saving"); setError("");
+    } finally { merging.current = false; }
+  };
   const autosave = (board: BoardState) => {
     const target = activeSlot.current;
     if (target === null || conflict.current) return;
@@ -62,7 +83,9 @@ export function useBoardPersistence(snapshot: BoardState, onRestore: (board: Boa
         setStatus(latest.current === board ? "saved" : "saving");
       })
       .catch(err => {
-        if (err instanceof SaveConflictError) { conflict.current = true; setStatus("conflict"); setError("This board was changed on another device."); }
+        if (err instanceof SaveConflictError) {
+          pullRemote(target).catch(() => { conflict.current = true; setStatus("conflict"); setError("This board was changed on another device."); });
+        }
         else { setStatus("error"); setError("Autosave failed. Your edits are still here."); }
       });
   };
@@ -76,24 +99,22 @@ export function useBoardPersistence(snapshot: BoardState, onRestore: (board: Boa
     return () => clearTimeout(timer);
   }, [snapshot, slot]);
 
-  // Returning to the tab: pick up newer saves from other devices if nothing here is unsaved.
+  // Every 15 seconds while visible, and when the tab is shown again: pull in newer saves from other browsers.
   useEffect(() => {
     let checking = false;
     const check = async () => {
       const target = activeSlot.current;
-      if (document.visibilityState !== "visible" || checking || target === null || conflict.current || latest.current !== saved.current) return;
+      if (document.visibilityState !== "visible" || checking || target === null || conflict.current) return;
       checking = true;
       try {
-        if ((await slotVersion(target)) > version.current && latest.current === saved.current && activeSlot.current === target) {
-          const loaded = await readSave(target);
-          if (latest.current === saved.current && activeSlot.current === target) applyLoaded(target, loaded);
-        }
+        if ((await slotVersion(target)) > version.current && activeSlot.current === target) await pullRemote(target);
       } catch { /* Offline or unavailable: keep working with what's on screen. */ }
       finally { checking = false; }
     };
+    const timer = window.setInterval(check, POLL_MS);
     document.addEventListener("visibilitychange", check);
     window.addEventListener("focus", check);
-    return () => { document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", check); window.removeEventListener("focus", check); };
   }, []);
 
   // Warn before closing the page while a change has not been saved yet.

@@ -94,3 +94,59 @@ export function removeSubtab(board: BoardState, parent: number, child: number): 
   if (board.active === parent && activeSubtab !== null) activeSubtab = activeSubtab === child ? null : activeSubtab > child ? activeSubtab - 1 : activeSubtab;
   return { ...board, activeSubtab, dashboards: board.dashboards.map((d, i) => i === parent ? { ...d, subTabs: d.subTabs.filter((_, j) => j !== child) } : d) };
 }
+
+// ---- Merging edits from two browsers ----
+// Three-way merge: "base" is the version both started from. For every part of the board, whoever changed
+// it wins; if both changed the very same part, "mine" (this browser) wins. Boxes, pictures and graphs are
+// matched by id, so edits to different boxes on the same tab are both kept, and deletions stick.
+const sameValue = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b);
+const pick = <T,>(base: T | undefined, mine: T, theirs: T): T => base !== undefined && sameValue(mine, base) ? theirs : mine;
+
+function mergeById<T extends { id: string }>(base: T[] = [], mine: T[] = [], theirs: T[] = []): T[] {
+  const index = (list: T[]) => new Map(list.map(item => [item.id, item]));
+  const B = index(base), M = index(mine), T_ = index(theirs);
+  const ids = [...mine.map(item => item.id), ...theirs.map(item => item.id).filter(id => !M.has(id))];
+  const out: T[] = [];
+  for (const id of ids) {
+    const b = B.get(id), m = M.get(id), t = T_.get(id);
+    if (m && t) out.push(pick(b, m, t));
+    else if (m) { if (!(b && sameValue(b, m))) out.push(m); }       // they deleted it, unless I changed it
+    else if (t) { if (!(b && sameValue(b, t))) out.push(t); }       // I deleted it, unless they changed it
+  }
+  return out;
+}
+
+function mergeDashboard<D extends DashboardState & { subTabs?: DashboardState[] }>(base: D | undefined, mine: D, theirs: D): D {
+  if (!base) return mine;
+  const merged = {
+    ...mine,
+    title: pick(base.title, mine.title, theirs.title),
+    items: pick(base.items, mine.items, theirs.items),
+    view: pick(base.view, mine.view, theirs.view),
+    photos: mergeById(base.photos, mine.photos, theirs.photos),
+    graphs: mergeById(base.graphs, mine.graphs, theirs.graphs),
+    bars: mergeById(base.bars, mine.bars, theirs.bars),
+    notes: mergeById(base.notes, mine.notes, theirs.notes),
+  } as D;
+  if (mine.subTabs && theirs.subTabs) {
+    const b = base.subTabs ?? [];
+    merged.subTabs = b.length === mine.subTabs.length && b.length === theirs.subTabs.length
+      ? mine.subTabs.map((sub, i) => mergeDashboard(b[i], sub, theirs.subTabs![i]!))
+      : pick(base.subTabs, mine.subTabs, theirs.subTabs);
+  }
+  return merged;
+}
+
+/** Combines this browser's board with another browser's newer save of the same slot. */
+export function mergeBoards(base: BoardState, mine: BoardState, theirs: BoardState): BoardState {
+  const b = base.dashboards, m = mine.dashboards, t = theirs.dashboards;
+  const dashboards = b.length === m.length && b.length === t.length
+    ? m.map((dashboard, i) => mergeDashboard(b[i], dashboard, t[i]!))
+    : pick(b, m, t); // tabs added, removed or reordered on one side: keep that side's tab list
+  return {
+    ...mine, // which tab is open stays per browser
+    homePhotos: mergeById(base.homePhotos, mine.homePhotos, theirs.homePhotos),
+    homeView: pick(base.homeView, mine.homeView, theirs.homeView),
+    dashboards,
+  };
+}

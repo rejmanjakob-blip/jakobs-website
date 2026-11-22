@@ -1,5 +1,5 @@
 import { boardSchema, type BoardState, type SaveSlot } from "@/lib/board-state";
-import { cloudGetPhotos, cloudList, cloudMissingPhotos, cloudPutPhoto, cloudRead, cloudStatus, cloudWrite } from "@/lib/cloud-saves.functions";
+import { cloudGetPhotos, cloudList, cloudMissingPhotos, cloudPutPhoto, cloudRead, cloudStatus, cloudVersion, cloudWrite } from "@/lib/cloud-saves.functions";
 
 /**
  * Whole-board save slots and uploaded videos.
@@ -197,7 +197,7 @@ export const writeSave = async (slot: number, snapshot: BoardState, overwrite: b
 export async function slotVersion(slot: number) {
   const b = await backend();
   if (b.kind !== "cloud") return 0;
-  return (await b.list()).find(row => row.slot === slot)?.version ?? 0;
+  return cloudVersion({ data: slot });
 }
 export const putVideo = async (name: string, file: Blob) => (await backend()).putVideo(name, file);
 export const getVideo = async (name: string) => (await backend()).getVideo(name);

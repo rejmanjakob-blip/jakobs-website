@@ -153,7 +153,7 @@ export function GlowBoard() {
       <Button variant="outline" aria-label={allMuted ? "Allow video sound" : "Turn off all video sound"} aria-pressed={allMuted} title={allMuted ? "All sound is off: click to allow sound" : "Sound allowed: click to silence every video"}
         className="glow-button h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={toggleAllMuted}>
         {allMuted ? <VolumeX strokeWidth={1.5} /> : <Volume2 strokeWidth={1.5} />}</Button>
-      <BoardSaveMenu snapshot={board} onRestore={restoreBoard} />
+      <BoardSaveMenu snapshot={board} onRestore={restoreBoard} onMerge={setBoard} />
       <Button variant="outline" aria-label="How to use" title="How to use" aria-expanded={helpOpen} data-no-subtab-prompt
         className="glow-button h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setHelpOpen(v => !v)}><CircleHelp strokeWidth={1.5} /></Button>
     </nav>
