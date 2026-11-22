@@ -115,7 +115,7 @@ function NoTypingSuggestions() {
       field.setAttribute("autocapitalize", "off");
       field.setAttribute("data-gramm", "false");
     };
-    document.querySelectorAll("input, textarea").forEach(quiet);
+    // Applied on focus only (spellcheck is already off via <html>), so it never edits fields React is still hydrating.
     const onFocus = (event: FocusEvent) => { if (event.target instanceof Element) quiet(event.target); };
     document.addEventListener("focusin", onFocus, true);
     return () => document.removeEventListener("focusin", onFocus, true);

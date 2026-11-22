@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { CircleHelp, Moon, Plus, Undo2 } from "lucide-react";
-import { MediaHiddenContext } from "@/components/background-photos";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { CircleHelp, Moon, Plus, Undo2, Volume2, VolumeX } from "lucide-react";
+import { MediaHiddenContext, SoundContext } from "@/components/background-photos";
 import { Button } from "@/components/ui/button";
 import { BackgroundPhotos, PhotoOptions, InsertVideo, useBackgroundPhotos } from "@/components/background-photos";
 import { BoardSaveMenu } from "@/components/board-save-menu";
@@ -93,6 +93,11 @@ export function GlowBoard() {
   }, cancelDeleteHold);
   const [parentPrompt, setParentPrompt] = useState(false);
   const [hideMedia, setHideMedia] = useState(false);
+  // Device-wide sound switch, remembered in this browser (e.g. keep a phone silent in public).
+  const [allMuted, setAllMuted] = useState(false);
+  useEffect(() => { try { setAllMuted(localStorage.getItem("glow-board:all-muted") === "1"); } catch { /* default: sound allowed */ } }, []);
+  const toggleAllMuted = () => setAllMuted(value => { try { localStorage.setItem("glow-board:all-muted", value ? "0" : "1"); } catch { /* still applies for this visit */ } return !value; });
+  const sound = useMemo(() => ({ allMuted }), [allMuted]);
   const parentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelParentHold = () => { if (parentTimer.current) clearTimeout(parentTimer.current); parentTimer.current = null; };
   useEffect(() => {
@@ -103,7 +108,7 @@ export function GlowBoard() {
   }, [parentPrompt]);
   const titles = board.dashboards.map(dashboard => dashboard.title);
   const homePhotos = useBackgroundPhotos({ photos: board.homePhotos, onChange: homePhotos => setBoard(previous => ({ ...previous, homePhotos })), centered: true });
-  return <MediaHiddenContext.Provider value={hideMedia}><div className="flex min-h-screen flex-col bg-background text-foreground">
+  return <MediaHiddenContext.Provider value={hideMedia}><SoundContext.Provider value={sound}><div className="flex min-h-screen flex-col bg-background text-foreground">
     <nav aria-label="Dashboard tabs" className="board-navigation">
       <Button variant="outline" size="icon" aria-label="Home" title="Home" aria-pressed={active === null}
         className="glow-button home-button h-6 w-7 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setActive(null)}><Moon strokeWidth={active === null ? 2 : 1.5} /></Button>
@@ -144,6 +149,9 @@ export function GlowBoard() {
       <Button variant="outline" aria-label={hideMedia ? "Show pictures and videos" : "Hide pictures and videos"} aria-pressed={hideMedia} title={hideMedia ? "Show media" : "Hide media"}
         className="glow-button -mr-1 h-6 w-8 shrink-0 p-0.5 [&_svg]:size-auto bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setHideMedia(v => !v)}>
         <HorusEye closed={hideMedia} /></Button>
+      <Button variant="outline" aria-label={allMuted ? "Allow video sound" : "Turn off all video sound"} aria-pressed={allMuted} title={allMuted ? "All sound is off: click to allow sound" : "Sound allowed: click to silence every video"}
+        className="glow-button h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={toggleAllMuted}>
+        {allMuted ? <VolumeX strokeWidth={1.5} /> : <Volume2 strokeWidth={1.5} />}</Button>
       <BoardSaveMenu snapshot={board} onRestore={restoreBoard} />
       <Button variant="outline" aria-label="How to use" title="How to use" aria-expanded={helpOpen} data-no-subtab-prompt
         className="glow-button h-6 w-7 shrink-0 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setHelpOpen(v => !v)}><CircleHelp strokeWidth={1.5} /></Button>
@@ -190,7 +198,7 @@ export function GlowBoard() {
         <Dashboard state={subtab} parentTitle={parent.title || "Title"} index={index} child={child} onUpdate={updateDashboard} />
       </div>)}
     </div>)}
-  </div></MediaHiddenContext.Provider>;
+  </div></SoundContext.Provider></MediaHiddenContext.Provider>;
 }
 
 type Item = MetricState & { text: string };
@@ -296,6 +304,7 @@ const HELP: [string, string][] = [
   ["Progress", "Hold a progress bar for 4 seconds to switch between a bar and checkboxes."],
   ["Graphs", "Double tap the bottom axis to add a bar, triple tap to remove one. Double tap the side axis for fractions."],
   ["Saving", "Everything saves automatically. The save button shows the slot in use; click it to keep copies in other slots."],
+  ["Videos", "Videos start silent and only play while on screen and big enough, so phones stay cool. Hover or tap a video for play/pause, sound on/off and a volume slider. The speaker in the top bar silences every video on this device."],
   ["Undo", "The arrow button or Ctrl+Z undoes your last 3 changes. The eye hides pictures and videos."],
 ];
 

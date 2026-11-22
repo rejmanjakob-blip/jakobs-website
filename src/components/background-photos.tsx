@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Pause, Play, Volume1, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { uploadVideo, useVideoUrl } from "@/lib/video-storage";
 
-export type Photo = { id: string; src: string; x: number; y: number; width: number; ratio: number; rotation: number; flipped: boolean; video?: boolean | undefined; crop?: Crop | undefined; collapsed?: boolean | undefined; title?: string | undefined; titleX?: number | undefined; titleY?: number | undefined; group?: string | undefined };
+export type Photo = { id: string; src: string; muted?: boolean | undefined; volume?: number | undefined; x: number; y: number; width: number; ratio: number; rotation: number; flipped: boolean; video?: boolean | undefined; crop?: Crop | undefined; collapsed?: boolean | undefined; title?: string | undefined; titleX?: number | undefined; titleY?: number | undefined; group?: string | undefined };
 export type Crop = { top: number; right: number; bottom: number; left: number };
 const NO_CROP: Crop = { top: 0, right: 0, bottom: 0, left: 0 };
 
@@ -174,7 +175,7 @@ export function BackgroundPhotos({ editor: rawEditor, centered = false, scale = 
         else taps.current = { id: photo.id, times: recent };
       }} onPointerCancel={() => { endHold(); gesture.current = null; taps.current = null; }}>
       {(() => { const c = photo.crop ?? NO_CROP; const fw = photo.width / (1 - c.left - c.right); const fh = photo.width / photo.ratio / (1 - c.top - c.bottom);
-        return <div className={`photo-crop ${photo.flipped ? "photo-flipped" : ""}`}>{photo.video ? <BoardVideo path={photo.src} style={{ position: "absolute", width: fw, height: fh, left: -c.left * fw, top: -c.top * fh, maxWidth: "none", objectFit: "cover" }} /> : <img src={photo.src} alt="Uploaded background photo" draggable={false} style={{ position: "absolute", width: fw, height: fh, left: -c.left * fw, top: -c.top * fh, maxWidth: "none" }} />}</div>; })()}
+        return <div className={`photo-crop ${photo.flipped ? "photo-flipped" : ""}`}>{photo.video ? <BoardVideo path={photo.src} sound={photo} selected={editor.selected === photo.id} onSound={changes => editor.update(photo.id, changes)} style={{ position: "absolute", width: fw, height: fh, left: -c.left * fw, top: -c.top * fh, maxWidth: "none", objectFit: "cover" }} /> : <img src={photo.src} alt="Uploaded background photo" draggable={false} style={{ position: "absolute", width: fw, height: fh, left: -c.left * fw, top: -c.top * fh, maxWidth: "none" }} />}</div>; })()}
       {cutting === photo.id && <span className="photo-cut-frame" aria-hidden="true" />}
     </div>)}
     {selectedPhoto && <div className="photo-options photo-toolbar" role="toolbar" aria-label="Picture tools" style={{ left: selectedPhoto.x, top: selectedPhoto.y - 26 }} onPointerDown={e => e.stopPropagation()}>
@@ -218,43 +219,100 @@ function VideoTitle({ lead, count, scale, editor, group }: { lead: Photo; count:
   </div>;
 }
 
-const playing: HTMLVideoElement[] = [];
-const MAX_PLAYING = 4;
 export const MAX_GROUP = 4;
 export const SMALL_VIDEO_PX = 220;
-function startVideo(el: HTMLVideoElement) {
-  if (!playing.includes(el)) playing.push(el);
-  while (playing.length > MAX_PLAYING) playing.shift()?.pause();
-  void el.play().catch(() => {});
-}
-function stopVideo(el: HTMLVideoElement) { const i = playing.indexOf(el); if (i >= 0) playing.splice(i, 1); el.pause(); }
 
-function BoardVideo({ path, style }: { path: string; style: React.CSSProperties }) {
+/**
+ * Looping videos are kept cheap:
+ * - only videos that are on screen, on the open tab and big enough actually play (others show a still frame);
+ * - at most 2 play at once (1 on phones, small-memory devices or data saver);
+ * - nothing plays while the page is in the background;
+ * - nothing starts by itself when the device asks for reduced motion or data saving (press play instead);
+ * - one shared timer checks sizes instead of one per video.
+ */
+const lite = () => typeof window !== "undefined" && (matchMedia("(pointer: coarse)").matches
+  || (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true
+  || ((navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8) <= 4);
+const calm = () => typeof window !== "undefined" && (matchMedia("(prefers-reduced-motion: reduce)").matches
+  || (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true);
+const maxPlaying = () => lite() ? 1 : 2;
+const playing: HTMLVideoElement[] = [];
+function startVideo(el: HTMLVideoElement, keep: boolean) {
+  if (!playing.includes(el)) playing.push(el);
+  // Videos with sound on are never the ones stopped to make room.
+  while (playing.length > maxPlaying()) {
+    const victim = playing.find(v => v !== el && v.muted) ?? (keep ? undefined : playing.find(v => v !== el));
+    if (!victim) break;
+    playing.splice(playing.indexOf(victim), 1); victim.pause();
+  }
+  if (el.paused) void el.play().catch(() => { if (!el.muted) { el.muted = true; void el.play().catch(() => {}); } });
+}
+function stopVideo(el: HTMLVideoElement) { const i = playing.indexOf(el); if (i >= 0) playing.splice(i, 1); if (!el.paused) el.pause(); }
+const checks = new Set<() => void>();
+let ticker: number | null = null;
+function watch(check: () => void) {
+  checks.add(check);
+  if (ticker === null) {
+    ticker = window.setInterval(() => checks.forEach(fn => fn()), 1500);
+    document.addEventListener("visibilitychange", runChecks);
+  }
+  return () => { checks.delete(check); if (!checks.size && ticker !== null) { window.clearInterval(ticker); ticker = null; document.removeEventListener("visibilitychange", runChecks); } };
+}
+function runChecks() { checks.forEach(fn => fn()); }
+
+/** Device-wide "all sound off" switch, kept in this browser. */
+export const SoundContext = createContext<{ allMuted: boolean }>({ allMuted: false });
+
+type Sound = { muted?: boolean | undefined; volume?: number | undefined };
+function BoardVideo({ path, style, sound, selected, onSound }: { path: string; style: React.CSSProperties; sound: Sound; selected: boolean; onSound: (changes: Sound) => void }) {
   const url = useVideoUrl(path);
   const ref = useRef<HTMLVideoElement>(null);
-  const [inspected, setInspected] = useState(false);
-  // Autoplay right after opening; a center click pauses/resumes by hand.
-  const [mode, setMode] = useState<"auto" | "forced" | "paused">("forced");
+  const { allMuted } = useContext(SoundContext);
+  const [hovered, setHovered] = useState(false);
+  // auto: plays when big and on screen. forced: the person pressed play. paused: the person pressed pause.
+  const [mode, setMode] = useState<"auto" | "forced" | "paused">(() => calm() ? "paused" : "auto");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const muted = allMuted || (sound.muted ?? true);
+  const volume = sound.volume ?? 0.8;
+  useEffect(() => { const el = ref.current; if (el) { el.muted = muted; el.volume = volume; } }, [muted, volume, url]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     let visible = false;
-    // Small on-screen videos stay paused on a still frame; only large, inspected or just-opened ones decode continuously.
-    const update = () => { if (mode === "paused") return stopVideo(el); const big = el.getBoundingClientRect().width >= SMALL_VIDEO_PX; if (visible && (big || inspected || mode === "forced")) startVideo(el); else stopVideo(el); };
+    const update = () => {
+      if (mode === "paused" || document.hidden || !visible) return stopVideo(el);
+      const big = el.getBoundingClientRect().width >= SMALL_VIDEO_PX;
+      if (mode === "forced" || !el.muted || big || hovered) startVideo(el, mode === "forced" || !el.muted); else stopVideo(el);
+    };
     const io = new IntersectionObserver(([entry]) => { visible = !!entry?.isIntersecting; update(); });
     const ro = new ResizeObserver(update);
     io.observe(el); ro.observe(el);
-    const t = window.setInterval(update, 1000);
-    return () => { io.disconnect(); ro.disconnect(); window.clearInterval(t); stopVideo(el); };
-  }, [url, inspected, mode]);
-  return url ? <video ref={ref} src={url} aria-label="Uploaded background video" muted loop playsInline disablePictureInPicture preload={inspected || mode === "forced" ? "auto" : "metadata"} style={style}
-    onPointerEnter={() => setInspected(true)} onPointerLeave={() => setInspected(false)}
-    onPointerDown={e => { const el = e.currentTarget, sx = e.clientX, sy = e.clientY;
-      // The photo wrapper captures the pointer, so listen for the release on the window.
-      window.addEventListener("pointerup", up => { if (Math.hypot(up.clientX - sx, up.clientY - sy) > 4) return;
-        const r = el.getBoundingClientRect(); const fx = (sx - r.left) / r.width, fy = (sy - r.top) / r.height;
-        if (fx > 0.25 && fx < 0.75 && fy > 0.25 && fy < 0.75) setMode(m => m === "paused" ? "forced" : "paused"); }, { once: true }); }} />
-    : <div aria-label="Loading video" style={style} />;
+    const unwatch = watch(update);
+    update();
+    return () => { io.disconnect(); ro.disconnect(); unwatch(); stopVideo(el); };
+  }, [url, hovered, mode, muted]);
+  if (!url) return <div aria-label="Loading video" style={style} />;
+  const showControls = hovered || selected || !muted || mode === "paused";
+  const stop = (e: React.PointerEvent | React.MouseEvent) => e.stopPropagation();
+  return <>
+    <video ref={ref} src={url} aria-label="Uploaded background video" loop playsInline muted disablePictureInPicture disableRemotePlayback
+      preload={mode === "forced" || hovered || selected ? "auto" : "metadata"} style={style}
+      onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)}
+      onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)} />
+    {showControls && <div className="video-controls" role="group" aria-label="Video controls" onPointerDown={stop} onPointerUp={stop} onClick={stop} onDoubleClick={stop}
+      onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+      <button type="button" aria-label={isPlaying ? "Pause video" : "Play video"} title={isPlaying ? "Pause" : "Play"}
+        onClick={() => setMode(isPlaying ? "paused" : "forced")}>
+        {isPlaying ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+      </button>
+      <button type="button" aria-label={muted ? "Turn sound on" : "Turn sound off"} aria-pressed={!muted} title={allMuted ? "All sound is off (top bar)" : muted ? "Sound on" : "Sound off"} disabled={allMuted}
+        onClick={() => { onSound({ muted: !muted }); if (muted) setMode("forced"); }}>
+        {muted ? <VolumeX aria-hidden="true" /> : volume < 0.5 ? <Volume1 aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
+      </button>
+      {!muted && <input type="range" min={0} max={100} step={5} value={Math.round(volume * 100)} aria-label="Volume" title={`Volume ${Math.round(volume * 100)}%`}
+        onChange={e => onSound({ volume: Number(e.target.value) / 100 })} />}
+    </div>}
+  </>;
 }
 
 export function InsertVideo({ editor }: { editor: Editor }) {

@@ -295,3 +295,14 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
   border-right: 1.5px solid var(--foreground); border-bottom: 1.5px solid var(--foreground); opacity: 0; transition: opacity 120ms; }
 .inner-box:hover > .inner-scale-grip, .inner-scale-grip:focus-visible, .inner-scale-grip:active { opacity: 1; }
 @media (hover: none) { .inner-scale-grip { opacity: 0.6; } }
+
+/* Video controls: small glowing bar in a video's bottom-left corner (hover, select, or while sound is on). */
+.video-controls { position: absolute; left: 6px; bottom: 6px; z-index: 3; display: flex; align-items: center; gap: 4px; padding: 3px;
+  background: var(--background); border: 1px solid var(--foreground); box-shadow: var(--glow); pointer-events: auto; cursor: default; }
+.photo-flipped .video-controls { transform: scaleX(-1); }
+.video-controls button { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; background: var(--background); color: var(--foreground); border: 1px solid transparent; cursor: pointer; }
+.video-controls button:hover:not(:disabled) { border-color: var(--foreground); }
+.video-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.video-controls svg { width: 15px; height: 15px; }
+.video-controls input[type="range"] { width: 72px; height: 16px; accent-color: var(--foreground); cursor: pointer; }
+@media (pointer: coarse) { .video-controls button { width: 32px; height: 32px; } .video-controls svg { width: 18px; height: 18px; } .video-controls input[type="range"] { width: 96px; } }
