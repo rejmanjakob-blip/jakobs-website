@@ -47,7 +47,7 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    const locked = passwordGate(request);
+    const locked = await passwordGate(request);
     if (locked) return locked;
     try {
       const handler = await getServerEntry();
