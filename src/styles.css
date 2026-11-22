@@ -323,3 +323,8 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
 
 /* Phone tab reordering: a held tab lifts (grows and glows) to show it can now be dragged. */
 .board-tab[data-lifted] { transform: scale(1.12); box-shadow: 0 0 14px var(--foreground); z-index: 5; position: relative; transition: transform 120ms, box-shadow 120ms; }
+
+/* While a phone tab is lifted for reordering, freeze every kind of scrolling and panning. */
+html.tab-reordering, html.tab-reordering body { overflow: hidden; overscroll-behavior: none; touch-action: none; }
+html.tab-reordering .board-tabs { overflow-x: hidden; touch-action: none; }
+html.tab-reordering [data-tab-background] { touch-action: none; pointer-events: none; }
