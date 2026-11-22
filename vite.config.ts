@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { defineConfig, loadEnv, type Plugin, type PluginOption } from "vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -65,6 +65,24 @@ function localSaves(): Plugin {
           }
         }
       };
+      // Before a slot is replaced, keep its previous version in saves/history/slot-N/.
+      // A copy is kept at most every 10 minutes, and always when the new save is much smaller
+      // (like a blank board replacing a full one). The newest 100 copies per slot are kept.
+      const HISTORY_GAP = 10 * 60 * 1000, HISTORY_KEEP = 100;
+      const backupSlot = async (slot: number, incomingSize: number) => {
+        const current = await exists(slotFile(slot));
+        if (!current) return;
+        const folder = path.join(dir, "history", `slot-${slot}`);
+        await mkdir(folder, { recursive: true });
+        const copies = (await readdir(folder)).filter(name => name.endsWith(".json")).sort();
+        const newest = copies.at(-1);
+        const newestTime = newest ? (await stat(path.join(folder, newest))).mtimeMs : 0;
+        const shrinking = incomingSize < current.size * 0.5;
+        if (!shrinking && Date.now() - newestTime < HISTORY_GAP) return;
+        const stamp = current.mtime.toISOString().replace(/[:.]/g, "-");
+        await copyFile(slotFile(slot), path.join(folder, `${stamp}.json`));
+        for (const old of [...copies, `${stamp}.json`].sort().slice(0, -HISTORY_KEEP)) await unlink(path.join(folder, old)).catch(() => {});
+      };
       const readBody = (req: import("node:http").IncomingMessage) => new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];
         let size = 0;
@@ -106,6 +124,7 @@ function localSaves(): Plugin {
                 const body = await readBody(req);
                 JSON.parse(body.toString("utf8"));
                 if (url.searchParams.get("overwrite") !== "1" && (await exists(slotFile(slot)))) return send(409, { error: "exists" });
+                await backupSlot(slot, body.length).catch(error => server.config.logger.warn(`[local-saves] backup skipped: ${error instanceof Error ? error.message : String(error)}`));
                 await atomicWrite(slotFile(slot), body);
                 const info = await stat(slotFile(slot));
                 return send(200, { slot, saved_at: info.mtime.toISOString() });

@@ -171,8 +171,15 @@ function backend(): Promise<Backend> {
     const folder = await fetch("/__local-saves/ping", { headers: HEADERS })
       .then(res => res.ok ? res.json() : null).then(body => body?.ok ? folderBackend : null, () => null);
     const cloud = await cloudStatus().catch(() => ({ enabled: false }));
-    if (cloud.enabled) return cloudBackend(folder, folder ?? browserBackend);
-    return folder ?? browserBackend;
+    if (!cloud.enabled) return folder ?? browserBackend;
+    const shared = cloudBackend(folder, folder ?? browserBackend);
+    // First run on this computer with an empty cloud: upload the saves folder before anything opens,
+    // so a blank board is never shown (or autosaved) in place of the real one.
+    if (folder) {
+      const [inCloud, onDisk] = await Promise.all([shared.list(), folder.list()]);
+      if (!inCloud.length && onDisk.length) await copyFolderInto(shared);
+    }
+    return shared;
   })();
   return chosen;
 }
@@ -195,17 +202,21 @@ export async function slotVersion(slot: number) {
 export const putVideo = async (name: string, file: Blob) => (await backend()).putVideo(name, file);
 export const getVideo = async (name: string) => (await backend()).getVideo(name);
 
+async function copyFolderInto(cloud: Backend) {
+  const rows = await folderBackend.list();
+  for (const row of rows) {
+    const saved = await folderBackend.read(row.slot);
+    if (saved) await cloud.write(row.slot, boardSchema.parse(saved.snapshot), false, null);
+  }
+  return rows.length;
+}
+
 /** Copies saves from this computer's folder into the empty cloud (first-time setup). */
 export async function uploadFolderToCloud() {
   const b = await backend();
   if (b.kind !== "cloud") throw new Error("Cloud saving is not set up.");
   if ((await b.list()).length) throw new Error("The cloud already has saves.");
-  const rows = await folderBackend.list();
-  for (const row of rows) {
-    const saved = await folderBackend.read(row.slot);
-    if (saved) await b.write(row.slot, boardSchema.parse(saved.snapshot), false, null);
-  }
-  return rows.length;
+  return copyFolderInto(b);
 }
 
 const LAST_SLOT = "glow-board:last-slot";
