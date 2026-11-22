@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-type Drag = { parent: number; child: number | null; x: number; y: number; pointer: number; target: number; moved: boolean };
+/**
+ * Tab drag-to-reorder. On touch screens a parent tab must be held for a moment before it drags;
+ * a quick sideways swipe scrolls the one-row tab bar instead (the tabs block native scrolling).
+ */
+type Drag = { parent: number; child: number | null; x: number; y: number; pointer: number; target: number; moved: boolean;
+  touch: { row: HTMLElement | null; armAt: number; scrollLeft: number; scrolling: boolean } | null };
+const HOLD_MS = 350;
 
 export function useTabDrag(onDrop: (parent: number, child: number | null, target: number) => void, onMove: () => void) {
   const drag = useRef<Drag | null>(null);
@@ -13,6 +19,17 @@ export function useTabDrag(onDrop: (parent: number, child: number | null, target
       const current = drag.current;
       if (!current || event.pointerId !== current.pointer) return;
       const delta = current.child === null ? event.clientX - current.x : event.clientY - current.y;
+      const touch = current.touch;
+      if (touch && !current.moved) {
+        // Swiping before the hold finishes scrolls the tab row.
+        if (touch.scrolling || (Math.abs(delta) >= 6 && event.timeStamp < touch.armAt)) {
+          touch.scrolling = true;
+          event.preventDefault();
+          if (touch.row) touch.row.scrollLeft = touch.scrollLeft - (event.clientX - current.x);
+          suppressClick.current = true;
+          return;
+        }
+      }
       if (!current.moved && Math.abs(delta) < 6) return;
       current.moved = true;
       event.preventDefault();
@@ -30,6 +47,7 @@ export function useTabDrag(onDrop: (parent: number, child: number | null, target
       if (!current || current.pointer !== event.pointerId) return;
       drag.current = null;
       setTarget(null);
+      if (current.touch?.scrolling) return;
       if (current.moved) {
         suppressClick.current = true;
         if (event.type === "pointerup") callbacks.current.onDrop(current.parent, current.child, current.target);
@@ -54,7 +72,9 @@ export function useTabDrag(onDrop: (parent: number, child: number | null, target
   const start = (event: ReactPointerEvent, parent: number, child: number | null = null) => {
     if (event.button !== 0 || event.isPrimary === false) return;
     suppressClick.current = false;
-    drag.current = { parent, child, x: event.clientX, y: event.clientY, pointer: event.pointerId, target: child ?? parent, moved: false };
+    const row = event.pointerType === "touch" && child === null ? (event.currentTarget as HTMLElement).closest<HTMLElement>(".board-tabs") : null;
+    drag.current = { parent, child, x: event.clientX, y: event.clientY, pointer: event.pointerId, target: child ?? parent, moved: false,
+      touch: row ? { row, armAt: event.timeStamp + HOLD_MS, scrollLeft: row.scrollLeft, scrolling: false } : null };
   };
   return { start, target };
 }

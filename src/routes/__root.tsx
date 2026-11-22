@@ -76,7 +76,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       // Private board: ask search engines and crawlers not to index or follow anything.
       { name: "robots", content: "noindex, nofollow, noarchive" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Glow Progress Board" },
       { name: "description", content: "Personal progress dashboards with notes and background photos." },
       { property: "og:title", content: "Glow Progress Board" },

@@ -36,7 +36,7 @@ export function HomePhotoScene({ editor, view, onViewChange }: { editor: ReturnT
         <div className="photo-options relative z-10"><InsertPhoto editor={editor} className="home-moon border-0 bg-transparent text-foreground hover:bg-transparent hover:text-foreground p-0"><svg aria-label="Moon" role="img" viewBox="0 0 100 100" fill="var(--background)" stroke="currentColor" strokeWidth={2.2} strokeLinecap="butt" strokeLinejoin="miter"><path d="M 64 5 A 46 46 0 1 0 95 66 C 53 79 25 42 64 5 Z" /></svg></InsertPhoto></div>
       </div>
     </div>
-    {!editor.selected && <div role="group" aria-label="Home zoom" className="absolute bottom-4 right-4 z-10 flex items-center gap-2 bg-background">
+    {!editor.selected && <div role="group" aria-label="Home zoom" className="zoom-controls absolute z-10 flex items-center gap-2 bg-background">
       <Button variant="outline" size="icon" className="glow-button h-7 w-7" aria-label="Zoom out" title="Zoom out" disabled={zoom <= 0.25} onClick={() => changeZoom(-0.1)}><Minus /></Button>
       <output aria-label="Zoom level" className="w-10 text-center text-xs">{Math.round(zoom * 100)}%</output>
       <Button variant="outline" size="icon" className="glow-button h-7 w-7" aria-label="Zoom in" title="Zoom in" disabled={zoom >= 3} onClick={() => changeZoom(0.1)}><Plus /></Button>

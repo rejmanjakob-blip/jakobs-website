@@ -216,7 +216,7 @@
   .board-tab[data-drag-child] { cursor: ns-resize; touch-action: none; user-select: none; }
   .board-tab[data-drag-target] { outline: 1px solid var(--foreground); outline-offset: 2px; }
   .board-tab-parent { position: relative; max-width: 100%; min-width: 0; }
-  .board-subtabs { position: absolute; top: 100%; left: 0; z-index: 30; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding-top: 5px; width: max-content; max-width: calc(100vw - 80px); }
+  .board-subtabs { position: fixed; z-index: 30; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding-top: 5px; width: max-content; max-width: calc(100vw - 80px); }
   .board-subtabs .board-tab { width: max-content; max-width: 100%; height: var(--parent-tab-height, 24px) !important; min-height: var(--parent-tab-height, 24px); flex-shrink: 0; overflow: hidden; background: var(--background); color: var(--foreground); }
   .subtab-prompt { position: fixed; z-index: 50; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; max-width: calc(100vw - 32px); padding: 18px; display: flex; flex-direction: column; gap: 16px; text-align: center; font-size: 14px; }
   .board-save { position: relative; flex-shrink: 0; }
@@ -306,3 +306,17 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
 .video-controls svg { width: 15px; height: 15px; }
 .video-controls input[type="range"] { width: 72px; height: 16px; accent-color: var(--foreground); cursor: pointer; }
 @media (pointer: coarse) { .video-controls button { width: 32px; height: 32px; } .video-controls svg { width: 18px; height: 18px; } .video-controls input[type="range"] { width: 96px; } }
+
+/* Same layout on phones as on laptops: the app fills exactly the visible screen, the top bar is one row
+   that stays at the top (swipe it sideways when tabs don't fit), and zoom buttons sit above the home bar. */
+.board-shell { height: 100vh; height: 100dvh; }
+.board-navigation { flex-shrink: 0; padding-top: max(16px, env(safe-area-inset-top)); padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.zoom-controls { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); }
+@media (max-width: 767px) {
+  .board-navigation { gap: 5px; }
+  .board-tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; flex: 1 1 auto; overscroll-behavior-x: contain; gap: 5px; }
+  .board-tabs::-webkit-scrollbar { display: none; }
+  .board-tab-parent { flex-shrink: 0; }
+  .board-tabs .board-tab { white-space: nowrap; }
+}
+@media (min-width: 768px) { .board-navigation { padding-top: max(24px, env(safe-area-inset-top)); padding-left: max(24px, env(safe-area-inset-left)); padding-right: max(24px, env(safe-area-inset-right)); } }

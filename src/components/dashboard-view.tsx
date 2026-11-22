@@ -40,7 +40,7 @@ export function DashboardView({ view, onChange, children }: { view: ViewState; o
     <div data-tab-background aria-label="Dashboard frame" className="absolute inset-0 flex flex-col" style={{ transformOrigin: "0 0", transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}>
       {children}
     </div>
-    <div role="group" aria-label="Page zoom" className="absolute bottom-4 right-4 z-30 flex items-center gap-2 bg-background">
+    <div role="group" aria-label="Page zoom" className="zoom-controls absolute z-30 flex items-center gap-2 bg-background">
       <Button variant="outline" size="icon" className="glow-button h-7 w-7" aria-label="Zoom out" disabled={view.zoom <= 0.25} onClick={() => center(view.zoom - 0.1)}><Minus /></Button>
       <output aria-label="Zoom level" className="w-10 text-center text-xs">{Math.round(view.zoom * 100)}%</output>
       <Button variant="outline" size="icon" className="glow-button h-7 w-7" aria-label="Zoom in" disabled={view.zoom >= 3} onClick={() => center(view.zoom + 0.1)}><Plus /></Button>

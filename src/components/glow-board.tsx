@@ -77,10 +77,10 @@ export function GlowBoard() {
     document.addEventListener("pointerdown", dismiss);
     return () => document.removeEventListener("pointerdown", dismiss);
   }, [pinnedParent]);
-  const [parentSize, setParentSize] = useState({ width: 0, height: 24 });
+  const [parentSize, setParentSize] = useState({ width: 0, height: 24, left: 0, top: 0 });
   const revealSubtabs = (index: number, element: HTMLElement) => {
     const bounds = element.querySelector(':scope > [role="tab"]')?.getBoundingClientRect();
-    if (bounds) setParentSize({ width: Math.max(0, window.innerWidth - bounds.left - 16), height: bounds.height });
+    if (bounds) setParentSize({ width: Math.max(0, window.innerWidth - bounds.left - 16), height: bounds.height, left: bounds.left, top: bounds.bottom });
     setHoveredParent(index);
   };
   const [deletePrompt, setDeletePrompt] = useState<{ parent: number; child: number; stage: 1 | 2 } | null>(null);
@@ -108,7 +108,7 @@ export function GlowBoard() {
   }, [parentPrompt]);
   const titles = board.dashboards.map(dashboard => dashboard.title);
   const homePhotos = useBackgroundPhotos({ photos: board.homePhotos, onChange: homePhotos => setBoard(previous => ({ ...previous, homePhotos })), centered: true });
-  return <MediaHiddenContext.Provider value={hideMedia}><SoundContext.Provider value={sound}><div className="flex min-h-screen flex-col bg-background text-foreground">
+  return <MediaHiddenContext.Provider value={hideMedia}><SoundContext.Provider value={sound}><div className="board-shell flex flex-col overflow-hidden bg-background text-foreground">
     <nav aria-label="Dashboard tabs" className="board-navigation">
       <Button variant="outline" size="icon" aria-label="Home" title="Home" aria-pressed={active === null}
         className="glow-button home-button h-6 w-7 p-[3px] bg-background text-foreground hover:bg-background hover:text-foreground" onClick={() => setActive(null)}><Moon strokeWidth={active === null ? 2 : 1.5} /></Button>
@@ -128,7 +128,7 @@ export function GlowBoard() {
             document.getElementById(`board-tab-${next}`)?.focus();
            }}> <span>{title || "Title"}</span></Button>
           {menuParent === index && ((board.dashboards[index]?.subTabs.length ?? 0) > 0 || (pinnedParent === index && active === index)) && <div data-no-subtab-prompt className="board-subtabs" role="group" aria-label={`${title || "Title"} subtabs`}
-            style={{ maxWidth: parentSize.width, "--parent-tab-height": `${parentSize.height}px` } as CSSProperties}>
+            style={{ maxWidth: parentSize.width, left: parentSize.left, top: parentSize.top, "--parent-tab-height": `${parentSize.height}px` } as CSSProperties}>
             {board.dashboards[index]?.subTabs.map((subtab, child) => <Button key={child} variant="outline" role="tab" id={`board-subtab-${index}-${child}`}
               aria-label={`Subtab ${child + 1}: ${title || "Title"} - ${subtab.title || "Title"}`} aria-selected={active === index && board.activeSubtab === child}
               aria-controls={`board-subpanel-${index}-${child}`} className="glow-button board-tab h-auto min-h-6 px-1.5 py-0.5 text-[10px] bg-background text-foreground hover:bg-background hover:text-foreground font-normal aria-selected:font-semibold"
