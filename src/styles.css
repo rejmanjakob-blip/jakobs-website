@@ -328,3 +328,25 @@ html.is-dragging .floating-box, html.is-dragging .progress-title textarea, html.
 html.tab-reordering, html.tab-reordering body { overflow: hidden; overscroll-behavior: none; touch-action: none; }
 html.tab-reordering .board-tabs { overflow-x: hidden; touch-action: none; }
 html.tab-reordering [data-tab-background] { touch-action: none; pointer-events: none; }
+
+/* Automatic unchecking: round button on a box's top-right corner, and its settings panel. */
+.floating-box > .reset-button { position: absolute; top: -9px; right: -9px; z-index: 4; display: grid; place-items: center; width: 18px; height: 18px; padding: 0;
+  border-radius: 999px; background: var(--background); color: var(--foreground); border: 1px solid var(--foreground); box-shadow: var(--glow);
+  cursor: pointer; opacity: 0; transition: opacity 120ms; }
+.floating-box > .reset-button svg { width: 10px; height: 10px; }
+.floating-box:hover > .reset-button, .floating-box:focus-within > .reset-button, .floating-box > .reset-button[data-active], .reset-button:focus-visible { opacity: 1; }
+.floating-box > .reset-button[data-active] { background: var(--foreground); color: var(--background); }
+@media (hover: none) { .floating-box > .reset-button { opacity: 0.7; } }
+.reset-backdrop { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
+.reset-dialog { width: 300px; max-width: 100%; padding: 18px; display: flex; flex-direction: column; gap: 12px; font-size: 13px; }
+.reset-dialog h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+.reset-sub { margin: -6px 0 0; font-size: 11px; opacity: .7; overflow-wrap: anywhere; }
+.reset-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.reset-choice { padding: 8px 6px; font-size: 12px; background: var(--background); color: var(--foreground); border: 1px solid var(--foreground); cursor: pointer; }
+.reset-choice[aria-checked="true"] { background: var(--foreground); color: var(--background); font-weight: 600; }
+.reset-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.reset-field > span { font-size: 12px; opacity: .8; }
+.reset-field select, .reset-field input { min-width: 0; flex: 1; max-width: 170px; padding: 6px 8px; font: inherit; font-size: 16px; color: var(--foreground); background: var(--background);
+  border: 1px solid var(--foreground); border-radius: 0; color-scheme: dark; }
+.reset-next { margin: 0; font-size: 12px; opacity: .85; }
+.reset-actions { display: flex; justify-content: flex-end; gap: 8px; }

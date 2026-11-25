@@ -22,3 +22,4 @@ Saves and uploaded videos live on the user's computer in `saves/` (git-ignored),
 - Share metric editing between anchor and floating boxes, persisting optional box-mode fields in snapshots so older saves remain compatible.
 - Floating boxes keep plain outer move/corner-resize; an optional textScale, set by the inner-area corner grip, scales only the inner content (note font size, progress content zoom).
 - Checkbox metric boxes keep a rigid single-line title and a digit-fitted total, with resize floors measured from the heading; clipping the square area never changes completion data.
+- Scheduled unchecking lives in src/lib/reset-schedule.ts: an optional per-box `reset` (day / week+weekday / 30days+start, local time, `last` stamp) on note and progress boxes; GlowBoard applies due resets via applyResets so each scheduled moment fires once across devices.

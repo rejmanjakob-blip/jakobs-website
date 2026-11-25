@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { BackgroundPhotos, PhotoOptions, InsertVideo, useBackgroundPhotos } from "@/components/background-photos";
 import { BoardSaveMenu } from "@/components/board-save-menu";
 import { BarGraphs, InsertGraph, newBarGraph } from "@/components/bar-graphs";
-import { addParent, MAX_PARENTS, addSubtab, removeSubtab, reorderParent, reorderSubtab, initialBoard, newDashboard, type DashboardState } from "@/lib/board-state";
+import { applyResets, addParent, MAX_PARENTS, addSubtab, removeSubtab, reorderParent, reorderSubtab, initialBoard, newDashboard, type DashboardState } from "@/lib/board-state";
 import { useTabDrag } from "@/hooks/use-tab-drag";
 import { useSubtabPrompt } from "@/hooks/use-subtab-prompt";
 import { HomePhotoScene } from "@/components/home-photo-scene";
@@ -58,6 +58,17 @@ export function GlowBoard() {
   }, []);
   useNoAccidentalSelection();
   useVisibleScreen();
+  // Scheduled unchecking: check shortly after any change (e.g. a save loading), every 30 s, and when the page is shown.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setBoard(previous => applyResets(previous, new Date()) ?? previous), 1000);
+    return () => window.clearTimeout(timer);
+  }, [board]);
+  useEffect(() => {
+    const check = () => { if (document.visibilityState === "visible") setBoard(previous => applyResets(previous, new Date()) ?? previous); };
+    const timer = window.setInterval(check, 30_000);
+    document.addEventListener("visibilitychange", check);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", check); };
+  }, []);
   const [helpOpen, setHelpOpen] = useState(false);
   // One stable updater for every dashboard, so unchanged tabs can skip re-rendering.
   const updateDashboard = useCallback((index: number, child: number | null, update: (state: DashboardState) => DashboardState) => setBoard(previous => ({
@@ -332,6 +343,7 @@ const HELP: [string, string][] = [
   ["Pictures", "Click a picture for rotate, flip and cut options. Tap it 3 times quickly to delete it. Hold a video to fold it into a title."],
   ["Checklists", "In a note, tap a line 3 times to turn it into a checkbox. Enter adds the next one; Enter twice stops."],
   ["Progress", "Hold a progress bar for 4 seconds to switch between a bar and checkboxes."],
+  ["Auto-uncheck", "Hover or tap a note or checkbox box and press the round ↻ on its top-right corner. Choose every day, every 7 days (pick the weekday) or every 30 days (pick the start date), and a time. A filled ↻ means a schedule is on."],
   ["Graphs", "Double tap the bottom axis to add a bar, triple tap to remove one. Double tap the side axis for fractions."],
   ["Saving", "Everything saves automatically. The save button shows the slot in use; click it to keep copies in other slots."],
   ["Videos", "Video upload is not available right now. Videos start silent and only play while on screen and big enough. The speaker in the top bar silences every video on this device."],

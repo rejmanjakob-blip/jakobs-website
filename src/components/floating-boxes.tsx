@@ -2,6 +2,7 @@ import { memo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ChecklistParagraph } from "@/components/checklist-paragraph";
 import { MetricEditor } from "@/components/metric-editor";
+import { ResetScheduleButton } from "@/components/reset-schedule-button";
 import type { NoteBoxState, ProgressBoxState } from "@/lib/board-state";
 
 const startX = (width: number) => typeof window === "undefined" ? 40 : Math.max(0, (window.innerWidth - width) / 2);
@@ -113,6 +114,7 @@ const ProgressBox = memo(function ProgressBox({ box, n, scale, onChange, onRemov
   const resizeBox = box.boxMode ? { ...box, height: box.height ?? (element.current?.getBoundingClientRect().height ?? 64 * scale) / scale } : box;
   const gesture = useBoxGesture(resizeBox, onChange, onRemove, scale, { w: box.boxMode ? minimumWidth() : 120, h: minimumHeight() });
   return <div ref={element} role="group" aria-label={`Progress box ${n}`} data-box-mode={box.boxMode ? "" : undefined} className="floating-box glow-box space-y-1 p-3" style={{ left: box.x, top: box.y, width: box.width, ...(box.boxMode ? { minWidth: minimumWidth() } : {}), ...(box.boxMode && box.height !== undefined ? { height: box.height, minHeight: minimumHeight() } : {}) }} {...gesture}>
+    {box.boxMode && <ResetScheduleButton value={box.reset} label={box.label || `Progress box ${n}`} onChange={reset => onChange({ reset })} />}
     <div className="inner-box relative h-full">
       <div className="h-full overflow-hidden" style={{ zoom: box.textScale ?? 1 }}><MetricEditor metric={box} label={`Progress box ${n}`} onChange={onChange} /></div>
       <InnerScaleGrip value={box.textScale ?? 1} label={`Progress box ${n}`} onChange={textScale => onChange({ textScale })} />
@@ -123,6 +125,7 @@ const ProgressBox = memo(function ProgressBox({ box, n, scale, onChange, onRemov
 const NoteBox = memo(function NoteBox({ box, n, scale, onChange, onRemove }: { box: NoteBoxState; n: number; scale: number; onChange: (c: Partial<NoteBoxState>) => void; onRemove: () => void }) {
   const gesture = useBoxGesture(box, onChange, onRemove, scale, { w: 80, h: 60 });
   return <div role="group" aria-label={`Paragraph box ${n}`} className="floating-box glow-box flex flex-col gap-1 p-3" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} {...gesture}>
+    <ResetScheduleButton value={box.reset} label={box.label || `Paragraph box ${n}`} onChange={reset => onChange({ reset })} />
     <input aria-label={`Paragraph box ${n} title`} value={box.label} onChange={e => onChange({ label: e.target.value })}
       style={{ fontSize: 8 * (box.textScale ?? 1) }} className="box-title bg-transparent text-[8px] font-semibold uppercase leading-tight outline-none" />
     <div className="inner-box relative flex min-h-0 flex-1">

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isDue, resetSchema, uncheckText } from "@/lib/reset-schedule";
 
 const metricFields = { boxMode: z.boolean().optional(), boxTotal: z.number().int().min(1).max(10000).optional(), boxFilled: z.array(z.boolean()).max(10000).optional() };
 const itemSchema = z.object({ label: z.string(), value: z.number().min(0).max(100), text: z.string(), ...metricFields });
@@ -6,8 +7,8 @@ const photoSchema = z.object({ id: z.string(), src: z.string(), x: z.number(), y
 export const graphSchema = z.object({ id: z.string(), xTitle: z.string(), yTitle: z.string(), values: z.array(z.number().min(0).max(100)).min(1), x: z.number().default(40), y: z.number().default(260), width: z.number().default(260), height: z.number().default(240), mode: z.enum(["percent", "fraction"]).default("percent"), denominator: z.number().int().min(1).max(25).default(1) });
 /** textScale zooms a box's text and controls together (corner resizing); older saves without it show at 1. */
 const textScale = z.number().min(0.2).max(5).optional();
-export const progressBoxSchema = z.object({ id: z.string(), label: z.string(), value: z.number().min(0).max(100), x: z.number(), y: z.number(), width: z.number(), height: z.number().positive().optional(), textScale, ...metricFields });
-export const noteBoxSchema = z.object({ id: z.string(), label: z.string(), text: z.string(), x: z.number(), y: z.number(), width: z.number(), height: z.number(), textScale });
+export const progressBoxSchema = z.object({ id: z.string(), label: z.string(), value: z.number().min(0).max(100), x: z.number(), y: z.number(), width: z.number(), height: z.number().positive().optional(), textScale, reset: resetSchema.optional(), ...metricFields });
+export const noteBoxSchema = z.object({ id: z.string(), label: z.string(), text: z.string(), x: z.number(), y: z.number(), width: z.number(), height: z.number(), textScale, reset: resetSchema.optional() });
 export type ProgressBoxState = z.infer<typeof progressBoxSchema>;
 export type NoteBoxState = z.infer<typeof noteBoxSchema>;
 const viewSchema = z.object({ zoom: z.number().min(0.25).max(3), x: z.number(), y: z.number() });
@@ -149,4 +150,27 @@ export function mergeBoards(base: BoardState, mine: BoardState, theirs: BoardSta
     homeView: pick(base.homeView, mine.homeView, theirs.homeView),
     dashboards,
   };
+}
+
+// ---- Scheduled unchecking ----
+/** Unchecks every box whose reset time has passed. Returns null when nothing was due. */
+export function applyResets(board: BoardState, now: Date): BoardState | null {
+  let changed = false;
+  const stamp = now.toISOString();
+  const resetDashboard = <D extends DashboardState & { subTabs?: DashboardState[] }>(d: D): D => {
+    const notes = d.notes.map(note => {
+      if (!note.reset || !isDue(note.reset, now)) return note;
+      changed = true;
+      return { ...note, text: uncheckText(note.text), reset: { ...note.reset, last: stamp } };
+    });
+    const bars = d.bars.map(bar => {
+      if (!bar.reset || !isDue(bar.reset, now)) return bar;
+      changed = true;
+      return { ...bar, boxFilled: (bar.boxFilled ?? []).map(() => false), reset: { ...bar.reset, last: stamp } };
+    });
+    const subTabs = d.subTabs?.map(resetDashboard);
+    return { ...d, notes, bars, ...(subTabs ? { subTabs } : {}) };
+  };
+  const dashboards = board.dashboards.map(resetDashboard);
+  return changed ? { ...board, dashboards } : null;
 }
